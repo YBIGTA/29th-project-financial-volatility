@@ -52,11 +52,42 @@ def clean_board(code: str) -> pd.DataFrame:
     return df
 
 
+def clean_paxnet_board(code: str) -> pd.DataFrame:
+    df = pd.read_csv(RAW_DIR / f"paxnet_board_{code}.csv", encoding="utf-8-sig")
+    df["clean_title"] = df["title"].map(clean_text)
+    df = df.drop_duplicates(subset=["clean_title", "author", "datetime"])
+    df = df[df["clean_title"].str.len() >= MIN_BOARD_TITLE_LEN]
+    out_path = PROCESSED_DIR / f"paxnet_board_{code}_clean.csv"
+    df.to_csv(out_path, index=False, encoding="utf-8-sig")
+    return df
+
+
+def clean_edaily_news(code: str) -> pd.DataFrame:
+    df = pd.read_csv(RAW_DIR / f"edaily_news_{code}.csv", encoding="utf-8-sig")
+    df["clean_headline"] = df["headline"].map(clean_text)
+    df["clean_body"] = df["body"].map(clean_text)
+    df = df.drop_duplicates(subset=["clean_headline", "clean_body"])
+    df = df[df["clean_headline"].str.len() > 0]
+    out_path = PROCESSED_DIR / f"edaily_news_{code}_clean.csv"
+    df.to_csv(out_path, index=False, encoding="utf-8-sig")
+    return df
+
+
+# 팍스넷 게시판은 삼성전자/SK하이닉스만 실사용 트래픽이 있고, 카카오/에코프로비엠은
+# 무관한 종목 홍보성 스팸으로 도배되어 있어 정제 대상에서 제외 (README 참고).
+PAXNET_VALID_CODES = ["005930", "000660"]
+
+
 def main():
     for code, name in STOCKS.items():
         news_df = clean_news(code)
         board_df = clean_board(code)
-        print(f"[clean] {code} {name}: news {len(news_df)}건, board {len(board_df)}건")
+        edaily_df = clean_edaily_news(code)
+        print(f"[clean] {code} {name}: naver news {len(news_df)}건, naver board {len(board_df)}건, edaily news {len(edaily_df)}건")
+
+    for code in PAXNET_VALID_CODES:
+        df = clean_paxnet_board(code)
+        print(f"[clean] {code} {STOCKS[code]}: paxnet board {len(df)}건")
 
 
 if __name__ == "__main__":
