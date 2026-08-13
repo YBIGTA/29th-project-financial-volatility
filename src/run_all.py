@@ -9,6 +9,7 @@ import crawl_edaily_news
 import crawl_news
 import crawl_paxnet_board
 import crawl_price
+import crawl_toss_community
 import preprocess
 
 
@@ -28,7 +29,10 @@ def main():
     print("\n=== 5. 이데일리 증권뉴스(비정형) 데이터 수집 ===")
     crawl_edaily_news.main()
 
-    print("\n=== 6. 텍스트 전처리 ===")
+    print("\n=== 6. 토스증권 커뮤니티(비정형) 데이터 수집 ===")
+    crawl_toss_community.main()
+
+    print("\n=== 7. 텍스트 전처리 ===")
     preprocess.main()
 
 
