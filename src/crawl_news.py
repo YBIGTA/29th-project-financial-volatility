@@ -55,8 +55,11 @@ def crawl_and_save(code: str) -> pd.DataFrame:
     new_df = crawl_news(code)
     out_path = RAW_DIR / f"news_{code}.csv"
 
+    new_df["id"] = new_df["id"].astype(str)
+
     if out_path.exists():
-        old_df = pd.read_csv(out_path, encoding="utf-8-sig")
+        old_df = pd.read_csv(out_path, encoding="utf-8-sig", dtype={"id": str})
+        old_df["datetime"] = pd.to_datetime(old_df["datetime"])
         combined = pd.concat([old_df, new_df], ignore_index=True)
         combined = combined.drop_duplicates(subset="id").sort_values("datetime")
     else:
