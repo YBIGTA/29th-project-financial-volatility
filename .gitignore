@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+
+# 데이터는 Google Drive로 관리 — 원본 raw/processed csv는 git에 올리지 않음
+data/raw/*
+data/processed/*
+!data/raw/.gitkeep
+!data/processed/.gitkeep
