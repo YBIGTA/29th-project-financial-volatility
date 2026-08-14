@@ -100,6 +100,9 @@ def clean_edaily_news(code: str) -> pd.DataFrame:
     return df
 
 
+MIN_TOSS_LIKES = 1  # 추천 0인 글은 노이즈일 가능성이 높아 제외 (표본 수집분 품질 보정 겸)
+
+
 def clean_toss_community(code: str) -> pd.DataFrame:
     name = STOCK_FILE_NAMES[code]
     df = pd.read_csv(RAW_DIR / f"toss_community_{name}.csv", encoding="utf-8-sig")
@@ -107,6 +110,7 @@ def clean_toss_community(code: str) -> pd.DataFrame:
     df = df.drop_duplicates(subset=["clean_message", "author", "datetime"])
     df = df[df["clean_message"].str.len() >= MIN_BOARD_TITLE_LEN]
     df = df[~df["clean_message"].map(is_low_signal)]
+    df = df[df["likes"] >= MIN_TOSS_LIKES]
     out_path = PROCESSED_DIR / f"toss_community_{name}_clean.csv"
     df.to_csv(out_path, index=False, encoding="utf-8-sig")
     return df
