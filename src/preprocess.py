@@ -64,6 +64,22 @@ def clean_news(code: str) -> pd.DataFrame:
     return df
 
 
+def clean_naver_search_news(code: str) -> pd.DataFrame:
+    """crawl_naver_search_news.py 결과 정제 — 직접 실행하지 않은 경우 파일이 없을 수 있어 건너뜀."""
+    name = STOCK_FILE_NAMES[code]
+    path = RAW_DIR / f"news_search_{name}.csv"
+    if not path.exists():
+        return pd.DataFrame(columns=["url", "code", "datetime", "clean_title", "clean_body"])
+    df = pd.read_csv(path, encoding="utf-8-sig")
+    df["clean_title"] = df["title"].map(clean_text)
+    df["clean_body"] = df["body"].map(clean_text)
+    df = df.drop_duplicates(subset=["clean_title", "clean_body"])
+    df = df[df["clean_title"].str.len() > 0]
+    out_path = PROCESSED_DIR / f"news_search_{name}_clean.csv"
+    df.to_csv(out_path, index=False, encoding="utf-8-sig")
+    return df
+
+
 def clean_board(code: str) -> pd.DataFrame:
     name = STOCK_FILE_NAMES[code]
     df = pd.read_csv(RAW_DIR / f"board_{name}.csv", encoding="utf-8-sig")
@@ -127,9 +143,10 @@ def main():
         board_df = clean_board(code)
         edaily_df = clean_edaily_news(code)
         toss_df = clean_toss_community(code)
+        search_df = clean_naver_search_news(code)
         print(
             f"[clean] {code} {name}: naver news {len(news_df)}건, naver board {len(board_df)}건, "
-            f"edaily news {len(edaily_df)}건, toss {len(toss_df)}건"
+            f"edaily news {len(edaily_df)}건, toss {len(toss_df)}건, naver search {len(search_df)}건"
         )
 
     for code in PAXNET_VALID_CODES:
