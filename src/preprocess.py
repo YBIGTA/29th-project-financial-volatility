@@ -26,7 +26,16 @@ MARKER_STOPWORDS = {
     "마감", "시작", "개장", "폐장", "장마감", "장시작", "오전장", "오후장",
     "동시호가", "단일가", "휴장", "상한가", "하한가", "체결", "완료",
 }
-PROFANITY_WORDS = ["놈", "새끼", "병신", "씨발", "좆", "지랄", "꺼져", "쓰레기"]
+# 심한 욕설/비방은 글 길이와 상관없이 항상 제외 (긴 글이어도 이런 단어가 섞이면
+# 시황 분석이 아니라 그냥 인신공격일 가능성이 높음)
+SEVERE_PROFANITY_WORDS = [
+    "씨발", "씨팔", "시발", "병신", "븅신", "좆같", "좆까", "좆되", "좆될", "좆됨", "좆됐", "개새끼", "개새기",
+    "미친놈", "미친년", "개소리", "창녀", "걸레년", "느금마", "느그애미", "니애미", "애미없",
+    "지랄하", "닥쳐", "꺼지라", "죽어버려", "자살해",
+]
+# 이 정도는 그 자체로 욕은 아니지만(예: "존버"는 투자 은어), 글이 짧을 때만
+# 비방성으로 보고 제외 — 길게 쓴 분석글에 섞여있으면 놔둠
+PROFANITY_WORDS = ["놈", "새끼", "병신", "좆", "지랄", "꺼져", "쓰레기", "년놈", "찐따", "장애"]
 SHORT_JUNK_LEN = 15  # 이 길이 이하이면서 욕설이 섞인 글은 분석 대상에서 제외
 
 
@@ -35,6 +44,8 @@ def is_low_signal(text: str) -> bool:
         return True
     core = WHITESPACE_RE.sub("", BRACKET_RE.sub("", text))
     if core in MARKER_STOPWORDS:
+        return True
+    if any(w in text for w in SEVERE_PROFANITY_WORDS):
         return True
     if len(text) <= SHORT_JUNK_LEN and any(w in text for w in PROFANITY_WORDS):
         return True
