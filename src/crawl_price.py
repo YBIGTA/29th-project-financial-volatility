@@ -7,7 +7,15 @@ import time
 import FinanceDataReader as fdr
 import pandas as pd
 
-from config import END_DATE, INDEXES, RAW_DIR, REQUEST_DELAY_SEC, START_DATE, STOCKS
+from config import (
+    END_DATE,
+    INDEXES,
+    PRICE_FILE_NAMES,
+    RAW_DIR,
+    REQUEST_DELAY_SEC,
+    START_DATE,
+    STOCKS,
+)
 
 
 def fetch_daily_ohlcv(code: str) -> pd.DataFrame:
@@ -23,7 +31,7 @@ def main():
 
     for code, name in {**STOCKS, **INDEXES}.items():
         df = fetch_daily_ohlcv(code)
-        out_path = RAW_DIR / f"price_daily_{code}.csv"
+        out_path = RAW_DIR / f"price_daily_{PRICE_FILE_NAMES[code]}.csv"
         df.to_csv(out_path, index=False, encoding="utf-8-sig")
         summary.append((code, name, len(df), df["date"].min(), df["date"].max()))
         time.sleep(REQUEST_DELAY_SEC)

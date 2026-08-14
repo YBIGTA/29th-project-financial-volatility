@@ -15,6 +15,28 @@ INDEXES = {
     "VIX": "VIX",
 }
 
+STOCK_FILE_NAMES = {
+    "005930": "samsung_electronics",
+    "000660": "sk_hynix",
+    "247540": "ecopro_bm",
+    "035720": "kakao",
+}
+
+STOCK_ENGLISH_NAMES = {
+    "005930": "Samsung Electronics",
+    "000660": "SK hynix",
+    "247540": "EcoPro BM",
+    "035720": "Kakao",
+}
+
+# FinanceDataReader 조회 코드는 유지하되, 저장 파일에는 읽기 쉬운 영문 이름을 사용합니다.
+PRICE_FILE_NAMES = {
+    **STOCK_FILE_NAMES,
+    "KS11": "kospi",
+    "KQ11": "kosdaq",
+    "VIX": "vix",
+}
+
 END_DATE = datetime.today().date()
 START_DATE = END_DATE - timedelta(days=90)
 

@@ -3,6 +3,7 @@ beautifulsoup4>=4.12
 pandas>=2.0
 finance-datareader>=0.9.50
 lxml>=5.0
+matplotlib>=3.8
 
 # sentiment_score.py (Track B 감성분석) — torch CPU wheel + 모델 가중치 합쳐 1GB+ 필요
 torch
