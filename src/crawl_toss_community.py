@@ -69,12 +69,23 @@ def _daily_sample_targets(start_date, end_date, seed: int | None = None) -> list
     return sorted(targets)
 
 
+NETWORK_RETRIES = 5
+NETWORK_RETRY_WAIT_SEC = 30  # 와이파이 순간 끊김/DNS 실패 같은 일시적 문제 대비
+
+
 def fetch_page(isin: str, last_comment_id: int | None = None) -> dict:
     params = {"subjectType": "STOCK", "subjectId": isin, "commentSortType": "RECENT"}
     if last_comment_id is not None:
         params["lastCommentId"] = last_comment_id
-    resp = requests.get(API_URL, params=params, headers=HEADERS, timeout=10)
-    return resp.json()["result"]
+    for attempt in range(1, NETWORK_RETRIES + 1):
+        try:
+            resp = requests.get(API_URL, params=params, headers=HEADERS, timeout=10)
+            return resp.json()["result"]
+        except requests.exceptions.RequestException as e:
+            if attempt == NETWORK_RETRIES:
+                raise
+            print(f"[toss] 네트워크 오류({e.__class__.__name__}), {NETWORK_RETRY_WAIT_SEC}초 후 재시도 ({attempt}/{NETWORK_RETRIES})")
+            time.sleep(NETWORK_RETRY_WAIT_SEC)
 
 
 def _page_date(results: list[dict]) -> pd.Timestamp:

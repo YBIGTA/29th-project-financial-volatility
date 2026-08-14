@@ -59,13 +59,23 @@ def _strip(text: str) -> str:
     return TAG_RE.sub("", text).strip()
 
 
+NETWORK_RETRIES = 5
+NETWORK_RETRY_WAIT_SEC = 30  # 와이파이 순간 끊김/DNS 실패 같은 일시적 문제 대비 (차단과는 별개)
+
+
+def _get_with_retries(url: str, params: dict) -> requests.Response:
+    for attempt in range(1, NETWORK_RETRIES + 1):
+        try:
+            return requests.get(url, params=params, headers=HEADERS, timeout=10)
+        except requests.exceptions.RequestException as e:
+            if attempt == NETWORK_RETRIES:
+                raise
+            print(f"[naver_search] 네트워크 오류({e.__class__.__name__}), {NETWORK_RETRY_WAIT_SEC}초 후 재시도 ({attempt}/{NETWORK_RETRIES})")
+            time.sleep(NETWORK_RETRY_WAIT_SEC)
+
+
 def fetch_search_page(query: str, ds: str, de: str, start: int) -> list[dict]:
-    resp = requests.get(
-        SEARCH_URL,
-        params={"where": "news", "query": query, "ds": ds, "de": de, "start": start},
-        headers=HEADERS,
-        timeout=10,
-    )
+    resp = _get_with_retries(SEARCH_URL, {"where": "news", "query": query, "ds": ds, "de": de, "start": start})
     text = resp.text
     if NO_MORE_RE in text:
         return []
