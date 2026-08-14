@@ -244,7 +244,7 @@ def crawl_and_save(code: str, sampled: bool = False) -> pd.DataFrame:
 
     if out_path.exists():
         old_df = pd.read_csv(out_path, encoding="utf-8-sig", dtype={"comment_id": str})
-        old_df["datetime"] = pd.to_datetime(old_df["datetime"])
+        old_df["datetime"] = pd.to_datetime(old_df["datetime"], format="mixed")
         combined = pd.concat([old_df, new_df], ignore_index=True)
         combined = combined.drop_duplicates(subset="comment_id").sort_values("datetime")
     else:
