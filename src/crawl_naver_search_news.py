@@ -19,11 +19,15 @@ from datetime import timedelta
 import pandas as pd
 import requests
 
-from config import END_DATE, RAW_DIR, REQUEST_DELAY_SEC, START_DATE, STOCK_FILE_NAMES, STOCKS, USER_AGENT
+from config import END_DATE, RAW_DIR, START_DATE, STOCK_FILE_NAMES, STOCKS, USER_AGENT
 
 HEADERS = {"User-Agent": USER_AGENT}
 SEARCH_URL = "https://search.naver.com/search.naver"
 MAX_PAGES_PER_DAY = 20  # 페이지당 10건 -> 하루 최대 200건까지, 2,000건 상한에 여유 있게
+
+# 일반 검색은 트래픽에 훨씬 민감해서(막히면 이후 요청이 전부 조용히 0건으로 새버림)
+# 다른 크롤러보다 요청 간격을 넉넉히 둔다.
+SEARCH_DELAY_SEC = 1.5
 
 HEADLINE_RE = re.compile(
     r'href="([^"]+)"[^>]*data-heatmap-target="\.tit"[^>]*>.*?'
@@ -33,6 +37,10 @@ HEADLINE_RE = re.compile(
 BODY_RE = re.compile(r'sds-comps-text-type-body1">(.*?)</span>', re.S)
 TAG_RE = re.compile(r"<[^>]+>")
 NO_MORE_RE = "표시할 검색결과가 없습니다"
+
+
+class BlockedOrChangedPageError(RuntimeError):
+    """네이버가 접근을 막았거나(비정상 트래픽 감지) 페이지 구조가 바뀐 것으로 의심될 때."""
 
 
 def _strip(text: str) -> str:
@@ -51,6 +59,14 @@ def fetch_search_page(query: str, ds: str, de: str, start: int) -> list[dict]:
         return []
 
     headlines = HEADLINE_RE.findall(text)
+    if not headlines:
+        # "검색결과 없음" 문구도 없는데 기사도 안 잡히면 십중팔구 차단이거나 구조 변경.
+        # 조용히 0건 처리하면 이후 전체가 빈 데이터로 새버리니 바로 멈춘다.
+        raise BlockedOrChangedPageError(
+            f"query={query!r} ds={ds} start={start}에서 기사를 하나도 못 찾았습니다. "
+            "네이버가 일시적으로 접근을 막았거나(잠시 후 재시도) 페이지 구조가 바뀐 것 같습니다."
+        )
+
     bodies = BODY_RE.findall(text)
     items = []
     for i, (url, title) in enumerate(headlines):
@@ -68,20 +84,13 @@ def crawl_day(query: str, day: pd.Timestamp) -> list[dict]:
         if not items:
             break
         all_items.extend(items)
-        time.sleep(REQUEST_DELAY_SEC)
+        time.sleep(SEARCH_DELAY_SEC)
     for item in all_items:
         item["datetime"] = day + pd.Timedelta(hours=12)  # 절대시각 없음 -> 그 날짜 정오로 채움
     return all_items
 
 
-def crawl_stock(code: str) -> pd.DataFrame:
-    query = STOCKS[code]
-    rows = []
-    day = START_DATE
-    while day <= END_DATE:
-        rows.extend(crawl_day(query, pd.Timestamp(day)))
-        day += timedelta(days=1)
-
+def _to_df(rows: list[dict], code: str) -> pd.DataFrame:
     cols = ["url", "title", "body", "datetime"]
     if not rows:
         return pd.DataFrame(columns=cols)
@@ -90,13 +99,40 @@ def crawl_stock(code: str) -> pd.DataFrame:
     return df.sort_values("datetime")
 
 
+def crawl_stock(code: str) -> tuple[pd.DataFrame, BlockedOrChangedPageError | None]:
+    """중간에 막히면 그때까지 모은 것만이라도 반환한다(전부 버리지 않음)."""
+    query = STOCKS[code]
+    rows = []
+    day = START_DATE
+    while day <= END_DATE:
+        try:
+            rows.extend(crawl_day(query, pd.Timestamp(day)))
+        except BlockedOrChangedPageError as e:
+            return _to_df(rows, code), e
+        day += timedelta(days=1)
+    return _to_df(rows, code), None
+
+
 def main():
     for code, name in STOCKS.items():
-        df = crawl_stock(code)
+        new_df, error = crawl_stock(code)
         out_path = RAW_DIR / f"news_search_{STOCK_FILE_NAMES[code]}.csv"
+
+        if out_path.exists():
+            # 이전에 막혀서 중간까지만 저장된 파일이 있으면 이번 결과와 합쳐서(url 기준 중복제거)
+            # 재실행할 때마다 처음부터 다시 긁지 않고 이어서 쌓이게 한다.
+            old_df = pd.read_csv(out_path, encoding="utf-8-sig")
+            df = pd.concat([old_df, new_df], ignore_index=True).drop_duplicates(subset="url").sort_values("datetime")
+        else:
+            df = new_df
+
         df.to_csv(out_path, index=False, encoding="utf-8-sig")
         span = f"{df['datetime'].min()} ~ {df['datetime'].max()}" if len(df) else "no data"
-        print(f"[naver_search] {code} {name}: {len(df)}건 ({span})")
+        print(f"[naver_search] {code} {name}: {len(df)}건 누적 ({span})")
+        if error:
+            print(f"[naver_search] 여기서 중단합니다: {error}")
+            print("네이버가 일시적으로 막았을 가능성이 높습니다. 시간을 두고(예: 30분~1시간) 다시 실행해보세요.")
+            return
 
 
 if __name__ == "__main__":
