@@ -11,12 +11,12 @@ robots.txt가 `Allow: /`라 직접 실행한다. 화면에는 안 보이지만 �
   임의로 오래된 lastCommentId를 넣어도 그 근처 시점 댓글이 바로 반환됨 —
   즉 순차 페이지네이션 없이 원하는 시점으로 바로 "점프"가 가능하다.
 
-삼성전자·SK하이닉스는 댓글 속도가 너무 빨라서(분당 여러 건) 3개월 전체를 순차
-페이지네이션으로 모으려면 요청이 9만 건 이상 필요 — 대신 위 점프 기능을 이용해
-`crawl_comments_sampled()`로 일정 간격(기본 6시간)마다 그 시점 댓글을 표본
-추출한다. 카카오·에코프로비엠처럼 댓글이 적은 종목은 기존 `crawl_comments()`
-순차 수집으로 충분히 3개월을 커버한다.
+인기 종목은 댓글 속도가 너무 빨라서(분당 여러 건) 3개월 전체를 순차 페이지네이션으로
+모으려면 요청이 9만 건 이상 필요 — 대신 위 점프 기능을 이용해 `crawl_comments_sampled()`로
+4종목 전부 표본 추출한다. 하루마다 장중/장외 각각 3~8곳을 무작위 시각으로 뽑아서(고정
+시각이 아님) 점프하는 방식이라, 매일 다른 시간대가 샘플링되고 특정 시각에 쏠리지 않는다.
 """
+import random
 import time
 
 import pandas as pd
@@ -40,19 +40,32 @@ SAMPLED_CODES = ["005930", "000660", "247540", "035720"]
 JUMP_MAX_ITERS = 6
 JUMP_TOLERANCE_SEC = 3600  # 목표 시각과 1시간 이내로 맞으면 충분
 
-# 하루 안에서도 장중/장외를 고르게 뽑도록 샘플 시각을 각각 고정해둔다.
-# 장중(09:00~15:30)에서 3곳, 장외(15:30~다음날 09:00)에서 4곳 — 세션당 표본 수가 비슷해지도록.
-INTRADAY_SAMPLE_TIMES = ["10:00", "12:30", "14:30"]
-OVERNIGHT_SAMPLE_TIMES = ["17:30", "21:00", "00:30", "05:00"]
+# 하루 안에서 장중/장외 각각 몇 곳을 뽑을지 -> 매일 3~8곳 사이에서 무작위, 시각도 고정하지 않고 무작위
+SAMPLES_PER_SESSION_RANGE = (3, 8)
+INTRADAY_WINDOW = ("09:00", "15:30")
+OVERNIGHT_WINDOW = ("15:30", "09:00")  # 다음날 09:00까지
 
 
-def _daily_sample_targets(start_date, end_date) -> list[tuple[pd.Timestamp, str]]:
+def _random_times_in_window(day: pd.Timestamp, start_str: str, end_str: str, n: int, rng: random.Random) -> list[pd.Timestamp]:
+    start = pd.Timestamp(f"{day.date()} {start_str}")
+    end = pd.Timestamp(f"{day.date()} {end_str}")
+    if end <= start:
+        end += pd.Timedelta(days=1)
+    span_minutes = (end - start).total_seconds() / 60
+    return [start + pd.Timedelta(minutes=rng.uniform(0, span_minutes)) for _ in range(n)]
+
+
+def _daily_sample_targets(start_date, end_date, seed: int | None = None) -> list[tuple[pd.Timestamp, str]]:
+    rng = random.Random(seed)
     targets = []
     for day in pd.date_range(start_date, end_date, freq="D"):
-        for t in INTRADAY_SAMPLE_TIMES:
-            targets.append((pd.Timestamp(f"{day.date()} {t}"), "intraday"))
-        for t in OVERNIGHT_SAMPLE_TIMES:
-            targets.append((pd.Timestamp(f"{day.date()} {t}"), "overnight"))
+        n_intraday = rng.randint(*SAMPLES_PER_SESSION_RANGE)
+        for t in _random_times_in_window(day, *INTRADAY_WINDOW, n_intraday, rng):
+            targets.append((t, "intraday"))
+
+        n_overnight = rng.randint(*SAMPLES_PER_SESSION_RANGE)
+        for t in _random_times_in_window(day, *OVERNIGHT_WINDOW, n_overnight, rng):
+            targets.append((t, "overnight"))
     return sorted(targets)
 
 

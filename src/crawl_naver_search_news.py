@@ -7,11 +7,15 @@
 # 한 번의 검색 쿼리는 최대 2,000건까지만 나옴("검색결과는 2,000건까지 제공합니다"
 # 문구로 실측 확인). 대신 ds(시작일)·de(종료일) 파라미터로 날짜 범위를 지정할 수 있어서,
 # 하루 단위로 쪼개서 여러 번 검색하면 하루치가 2,000건을 넘지 않는 한 상한 문제를 피할 수 있음.
+# 다만 예전 종목뉴스 API도 2,000건 상한을 다 못 채우고 6일치 정도에서 끝났던 걸 보면,
+# 하루에 다 긁으려 욕심낼 필요가 없어서 하루 3페이지(30건)만 표본으로 가져온다 — 그래야
+# 요청 총량이 줄어서 IP 차단 위험도 낮아지고, 90일 전체를 고르게 훑을 수 있음.
 #
 # 주의: 검색 결과 화면은 상대시각("N시간 전")만 보여주고 절대시각은 안 줘서, datetime은
 # 정확한 시각이 아니라 "그 날짜의 정오"로만 채움 — 시간 단위 정밀도가 필요하면
 # 기사 링크를 열어서 개별로 다시 가져와야 함. headline1/body1 클래스명도 네이버가 프론트엔드를
 # 바꾸면 깨질 수 있으니, 실행 결과가 0건만 계속 나오면 구조가 바뀐 건지 먼저 확인할 것.
+import random
 import re
 import time
 from datetime import timedelta
@@ -23,11 +27,19 @@ from config import END_DATE, RAW_DIR, START_DATE, STOCK_FILE_NAMES, STOCKS, USER
 
 HEADERS = {"User-Agent": USER_AGENT}
 SEARCH_URL = "https://search.naver.com/search.naver"
-MAX_PAGES_PER_DAY = 20  # 페이지당 10건 -> 하루 최대 200건까지, 2,000건 상한에 여유 있게
+
+# 예전 종목뉴스 API도 상한 2,000건을 다 못 채우고 실제로는 6일치 정도만 나왔던 걸 감안하면,
+# 하루에 욕심내서 다 긁을 필요 없음 -> 하루 3페이지(30건)만 표본으로 가져오는 대신
+# 90일 전체를 다 훑어서, 총 요청 수를 최대 7,200번 -> 최대 1,080번으로 줄인다.
+MAX_PAGES_PER_DAY = 3
 
 # 일반 검색은 트래픽에 훨씬 민감해서(막히면 이후 요청이 전부 조용히 0건으로 새버림)
-# 다른 크롤러보다 요청 간격을 넉넉히 둔다.
-SEARCH_DELAY_SEC = 1.5
+# 다른 크롤러보다 요청 간격을 넉넉히 두고, 매번 똑같은 간격이면 그 자체도 패턴이라 흔들어준다.
+SEARCH_DELAY_RANGE = (1.5, 3.5)
+
+
+def _search_delay() -> float:
+    return random.uniform(*SEARCH_DELAY_RANGE)
 
 HEADLINE_RE = re.compile(
     r'href="([^"]+)"[^>]*data-heatmap-target="\.tit"[^>]*>.*?'
@@ -84,7 +96,7 @@ def crawl_day(query: str, day: pd.Timestamp) -> list[dict]:
         if not items:
             break
         all_items.extend(items)
-        time.sleep(SEARCH_DELAY_SEC)
+        time.sleep(_search_delay())
     for item in all_items:
         item["datetime"] = day + pd.Timedelta(hours=12)  # 절대시각 없음 -> 그 날짜 정오로 채움
     return all_items
