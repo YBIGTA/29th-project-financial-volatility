@@ -8,3 +8,6 @@ data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+
+# 종목별 정리(merged csv + 차트)도 Drive로 관리
+data/정리/
