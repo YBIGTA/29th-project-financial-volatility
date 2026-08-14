@@ -111,40 +111,70 @@ def _to_df(rows: list[dict], code: str) -> pd.DataFrame:
     return df.sort_values("datetime")
 
 
-def crawl_stock(code: str) -> tuple[pd.DataFrame, BlockedOrChangedPageError | None]:
-    """중간에 막히면 그때까지 모은 것만이라도 반환한다(전부 버리지 않음)."""
+# 막히면 완전히 멈추지 않고 자동으로 쉬었다가 재시도 -> 자는 동안 알아서 회복되게.
+COOLDOWN_MINUTES = 20
+MAX_RETRIES = 6  # 20분 x 6 = 최대 2시간까지 자동으로 버팀
+
+
+def _already_covered_days(out_path) -> set:
+    if not out_path.exists():
+        return set()
+    old_df = pd.read_csv(out_path, encoding="utf-8-sig")
+    if not len(old_df):
+        return set()
+    return set(pd.to_datetime(old_df["datetime"]).dt.date)
+
+
+def crawl_stock(code: str, skip_days: set) -> tuple[pd.DataFrame, BlockedOrChangedPageError | None]:
+    """중간에 막히면 그때까지 모은 것만이라도 반환한다(전부 버리지 않음).
+    skip_days에 들어있는 날짜는 이전 시도에서 이미 확보했다고 보고 다시 요청하지 않는다."""
     query = STOCKS[code]
     rows = []
     day = START_DATE
     while day <= END_DATE:
-        try:
-            rows.extend(crawl_day(query, pd.Timestamp(day)))
-        except BlockedOrChangedPageError as e:
-            return _to_df(rows, code), e
+        if day not in skip_days:
+            try:
+                rows.extend(crawl_day(query, pd.Timestamp(day)))
+            except BlockedOrChangedPageError as e:
+                return _to_df(rows, code), e
         day += timedelta(days=1)
     return _to_df(rows, code), None
 
 
+def _save_merged(code: str, new_df: pd.DataFrame, out_path) -> pd.DataFrame:
+    if out_path.exists():
+        old_df = pd.read_csv(out_path, encoding="utf-8-sig")
+        df = pd.concat([old_df, new_df], ignore_index=True).drop_duplicates(subset="url").sort_values("datetime")
+    else:
+        df = new_df
+    df.to_csv(out_path, index=False, encoding="utf-8-sig")
+    return df
+
+
+def run_stock_with_retries(code: str, name: str) -> None:
+    out_path = RAW_DIR / f"news_search_{STOCK_FILE_NAMES[code]}.csv"
+
+    for attempt in range(1, MAX_RETRIES + 1):
+        skip_days = _already_covered_days(out_path)
+        new_df, error = crawl_stock(code, skip_days)
+        df = _save_merged(code, new_df, out_path)
+        span = f"{df['datetime'].min()} ~ {df['datetime'].max()}" if len(df) else "no data"
+        print(f"[naver_search] {code} {name} (시도 {attempt}/{MAX_RETRIES}): {len(df)}건 누적 ({span})")
+
+        if not error:
+            return
+
+        print(f"[naver_search] 막힌 것으로 보입니다: {error}")
+        if attempt < MAX_RETRIES:
+            print(f"[naver_search] {COOLDOWN_MINUTES}분 쉬었다가 자동으로 다시 시도합니다...")
+            time.sleep(COOLDOWN_MINUTES * 60)
+        else:
+            print(f"[naver_search] {code} {name}: {MAX_RETRIES}번 재시도했는데도 계속 막혀서 여기서 멈춥니다.")
+
+
 def main():
     for code, name in STOCKS.items():
-        new_df, error = crawl_stock(code)
-        out_path = RAW_DIR / f"news_search_{STOCK_FILE_NAMES[code]}.csv"
-
-        if out_path.exists():
-            # 이전에 막혀서 중간까지만 저장된 파일이 있으면 이번 결과와 합쳐서(url 기준 중복제거)
-            # 재실행할 때마다 처음부터 다시 긁지 않고 이어서 쌓이게 한다.
-            old_df = pd.read_csv(out_path, encoding="utf-8-sig")
-            df = pd.concat([old_df, new_df], ignore_index=True).drop_duplicates(subset="url").sort_values("datetime")
-        else:
-            df = new_df
-
-        df.to_csv(out_path, index=False, encoding="utf-8-sig")
-        span = f"{df['datetime'].min()} ~ {df['datetime'].max()}" if len(df) else "no data"
-        print(f"[naver_search] {code} {name}: {len(df)}건 누적 ({span})")
-        if error:
-            print(f"[naver_search] 여기서 중단합니다: {error}")
-            print("네이버가 일시적으로 막았을 가능성이 높습니다. 시간을 두고(예: 30분~1시간) 다시 실행해보세요.")
-            return
+        run_stock_with_retries(code, name)
 
 
 if __name__ == "__main__":
