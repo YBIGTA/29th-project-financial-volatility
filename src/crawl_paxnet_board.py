@@ -10,7 +10,7 @@ import time
 import pandas as pd
 import requests
 
-from config import PROCESSED_DIR, RAW_DIR, REQUEST_DELAY_SEC, START_DATE, STOCKS, USER_AGENT
+from config import PROCESSED_DIR, RAW_DIR, REQUEST_DELAY_SEC, START_DATE, STOCK_FILE_NAMES, STOCKS, USER_AGENT
 
 HEADERS = {"User-Agent": USER_AGENT}
 LIST_URL = "https://www.paxnet.co.kr/tbbs/list"
@@ -68,7 +68,7 @@ def crawl_board(code: str, max_page: int = 500) -> pd.DataFrame:
 
 def crawl_and_save(code: str) -> pd.DataFrame:
     df = crawl_board(code)
-    out_path = RAW_DIR / f"paxnet_board_{code}.csv"
+    out_path = RAW_DIR / f"paxnet_board_{STOCK_FILE_NAMES[code]}.csv"
     df.to_csv(out_path, index=False, encoding="utf-8-sig")
     return df
 

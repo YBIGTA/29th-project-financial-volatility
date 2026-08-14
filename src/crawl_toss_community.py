@@ -16,7 +16,7 @@ import time
 import pandas as pd
 import requests
 
-from config import RAW_DIR, REQUEST_DELAY_SEC, START_DATE, STOCKS, USER_AGENT
+from config import RAW_DIR, REQUEST_DELAY_SEC, START_DATE, STOCK_FILE_NAMES, STOCKS, USER_AGENT
 
 HEADERS = {"User-Agent": USER_AGENT}
 API_URL = "https://wts-cert-api.tossinvest.com/api/v4/comments"
@@ -81,7 +81,7 @@ def crawl_comments(code: str, max_page: int = 500) -> pd.DataFrame:
 def crawl_and_save(code: str) -> pd.DataFrame:
     new_df = crawl_comments(code)
     new_df["comment_id"] = new_df["comment_id"].astype(str)
-    out_path = RAW_DIR / f"toss_community_{code}.csv"
+    out_path = RAW_DIR / f"toss_community_{STOCK_FILE_NAMES[code]}.csv"
 
     if out_path.exists():
         old_df = pd.read_csv(out_path, encoding="utf-8-sig", dtype={"comment_id": str})

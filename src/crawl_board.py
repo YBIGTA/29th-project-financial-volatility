@@ -15,7 +15,7 @@ import pandas as pd
 import requests
 from bs4 import BeautifulSoup
 
-from config import NAVER_MAX_PAGE, RAW_DIR, REQUEST_DELAY_SEC, STOCKS, USER_AGENT
+from config import NAVER_MAX_PAGE, RAW_DIR, REQUEST_DELAY_SEC, STOCK_FILE_NAMES, STOCKS, USER_AGENT
 
 HEADERS = {"User-Agent": USER_AGENT}
 LIST_URL = "https://finance.naver.com/item/board.naver"
@@ -87,7 +87,7 @@ def crawl_board(code: str, max_page: int = NAVER_MAX_PAGE) -> pd.DataFrame:
 
 def crawl_and_save(code: str) -> pd.DataFrame:
     new_df = crawl_board(code)
-    out_path = RAW_DIR / f"board_{code}.csv"
+    out_path = RAW_DIR / f"board_{STOCK_FILE_NAMES[code]}.csv"
 
     new_df["nid"] = new_df["nid"].astype(str)
 

@@ -12,7 +12,7 @@ from datetime import timedelta
 import pandas as pd
 import requests
 
-from config import END_DATE, PROCESSED_DIR, RAW_DIR, REQUEST_DELAY_SEC, START_DATE, STOCKS, USER_AGENT
+from config import END_DATE, PROCESSED_DIR, RAW_DIR, REQUEST_DELAY_SEC, START_DATE, STOCK_FILE_NAMES, STOCKS, USER_AGENT
 
 HEADERS = {"User-Agent": USER_AGENT}
 API_URL = "https://www.edaily.co.kr/article/MoreList"
@@ -82,7 +82,7 @@ def main():
     by_stock = split_by_stock(all_df)
     for code, name in STOCKS.items():
         df = by_stock[code]
-        out_path = RAW_DIR / f"edaily_news_{code}.csv"
+        out_path = RAW_DIR / f"edaily_news_{STOCK_FILE_NAMES[code]}.csv"
         df.to_csv(out_path, index=False, encoding="utf-8-sig")
         span = f"{df['datetime'].min()} ~ {df['datetime'].max()}" if len(df) else "no data"
         print(f"[edaily] {code} {name}: {len(df)}건 ({span})")

@@ -9,7 +9,7 @@ import time
 import pandas as pd
 import requests
 
-from config import NAVER_MAX_PAGE, RAW_DIR, REQUEST_DELAY_SEC, STOCKS, USER_AGENT
+from config import NAVER_MAX_PAGE, RAW_DIR, REQUEST_DELAY_SEC, STOCK_FILE_NAMES, STOCKS, USER_AGENT
 
 HEADERS = {"User-Agent": USER_AGENT}
 API_URL = "https://m.stock.naver.com/api/news/stock/{code}"
@@ -53,7 +53,7 @@ def crawl_news(code: str, max_page: int = NAVER_MAX_PAGE) -> pd.DataFrame:
 
 def crawl_and_save(code: str) -> pd.DataFrame:
     new_df = crawl_news(code)
-    out_path = RAW_DIR / f"news_{code}.csv"
+    out_path = RAW_DIR / f"news_{STOCK_FILE_NAMES[code]}.csv"
 
     new_df["id"] = new_df["id"].astype(str)
 
