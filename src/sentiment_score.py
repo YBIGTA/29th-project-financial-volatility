@@ -71,7 +71,7 @@ def _load_source(code: str, filename: str, id_col: str, text_cols: list[str], so
     return pd.DataFrame(
         {
             "item_id": source + "_" + df[id_col].astype(str),
-            "datetime": pd.to_datetime(df["datetime"]),
+            "datetime": pd.to_datetime(df["datetime"], format="mixed"),
             "text": text.str.slice(0, 500),
             "source": source,
         }
