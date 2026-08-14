@@ -9,3 +9,6 @@ matplotlib>=3.8
 torch
 transformers
 sentencepiece
+
+numpy>=1.26
+statsmodels>=0.14
