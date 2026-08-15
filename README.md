@@ -117,7 +117,7 @@ GET https://wts-cert-api.tossinvest.com/api/v4/comments
 - 일별 하나로 뭉치지 않고 실제 거래일 기준으로 **장중(intraday, 09:00~15:30 게시물)**과 **장외(overnight, 전 거래일 15:30 이후~해당 거래일 09:00 이전 게시물)**를 나눠서 지수화합니다. 주말·공휴일 게시물은 가장 가까운 다음 거래일의 장외 감성에 포함됩니다.
 - 게시물이 없는 구간은 감성지수를 `0`으로 채우되 `no_posts=1`을 같이 기록해서, 실제 중립 감성(`sentiment_index=0, no_posts=0`)과 정보 부재를 구분할 수 있게 했습니다.
 - `sentiment_score.py --aggregate-only`로 모델을 다시 돌리지 않고 집계만 갱신할 수 있습니다.
-- `build_summary.py`가 감성지수와 시세를 합쳐 종목별 `data/정리/{영문종목명}/merged_daily.csv`와 차트 4종(장중/장외 감성, 종가, 캔들스틱)을 만듭니다.
+- `build_summary.py`가 감성지수와 시세를 합쳐 종목별 `data/정리/{영문종목명}/merged_daily.csv`와 차트 5종(장중/장외 감성, 종가, 캔들스틱, 감성·종가 비교)을 만듭니다.
 
 ## 크롤링 사이트별 상태
 

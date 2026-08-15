@@ -6,6 +6,7 @@
 - overnight_sentiment.png
 - candlestick.png
 - close_price_line.png
+- sentiment_vs_close.png
 """
 from __future__ import annotations
 
@@ -146,6 +147,37 @@ def plot_close_line(merged: pd.DataFrame, company: str, output_path) -> None:
     plt.close(fig)
 
 
+def plot_sentiment_vs_close(
+    merged: pd.DataFrame,
+    sentiment: pd.DataFrame,
+    company: str,
+    output_path,
+) -> None:
+    intraday = merged["intraday_sentiment_index"].mask(sentiment["intraday_no_posts"].eq(1))
+    overnight = merged["overnight_sentiment_index"].mask(sentiment["overnight_no_posts"].eq(1))
+    daily_sentiment = pd.concat([intraday, overnight], axis=1).mean(axis=1, skipna=True)
+    price = merged["close"]
+    x = np.arange(len(merged))
+
+    fig, ax = plt.subplots(figsize=(13, 5.5))
+    ax.plot(x, daily_sentiment, color="#2563EB", linewidth=1.8, marker="o", markersize=3)
+    ax.axhline(0, color="#475569", linewidth=1)
+    _style_axis(ax, f"{company} - Sentiment vs Close Price", "Sentiment (-1 to +1)")
+    ax.yaxis.label.set_color("#2563EB")
+
+    price_ax = ax.twinx()
+    price_ax.plot(x, price, color="#0F766E", linewidth=2.0, alpha=0.85)
+    price_ax.set_ylabel("Close price (KRW)")
+    price_ax.yaxis.label.set_color("#0F766E")
+    price_ax.spines[["top"]].set_visible(False)
+
+    _set_date_ticks(ax, merged["date"])
+    ax.set_xlabel("Trading date")
+    fig.subplots_adjust(left=0.08, right=0.92, top=0.92, bottom=0.15)
+    fig.savefig(output_path, dpi=170, bbox_inches="tight")
+    plt.close(fig)
+
+
 def build_stock_summary(code: str) -> None:
     label = STOCK_FILE_NAMES[code]
     company = STOCK_ENGLISH_NAMES[code]
@@ -163,6 +195,7 @@ def build_stock_summary(code: str) -> None:
     plot_sentiment(merged, sentiment, company, "overnight", output_dir / "overnight_sentiment.png")
     plot_candlestick(merged, company, output_dir / "candlestick.png")
     plot_close_line(merged, company, output_dir / "close_price_line.png")
+    plot_sentiment_vs_close(merged, sentiment, company, output_dir / "sentiment_vs_close.png")
 
     missing_price_rows = int(merged["close"].isna().sum())
     print(f"[summary] {company}: {len(merged)} rows, missing price rows={missing_price_rows}")
