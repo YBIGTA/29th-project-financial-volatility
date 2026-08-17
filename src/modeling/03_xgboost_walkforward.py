@@ -1,5 +1,9 @@
 """
-3단계: XGBoost (base / +sentiment) - Walk-forward + 홀드아웃 (v3: 4종목 전체 루프)
+3단계: XGBoost (base / +sentiment) - Walk-forward + 홀드아웃 (v4)
+
+[v3 -> v4 변경사항]
+- (01번과 동일 사유) vkospi_close/vkospi_lag1(레벨, 비정상) -> vkospi_change/vkospi_change_lag1
+  (변화율, 정상성 확인됨)로 피처 교체
 
 [v2 -> v3 변경사항]
 - STOCK_NAME 하나만 처리하던 구조 -> STOCKS 리스트 전체를 순회하도록 변경
@@ -18,7 +22,7 @@ STOCKS = ["samsung_electronics", "sk_hynix", "kakao", "ecopro_bm"]
 FEATURES_BASE = [
     "realized_vol",
     "realized_vol_lag1", "realized_vol_lag2", "realized_vol_lag3",
-    "log_ret_lag1", "vkospi_close", "vkospi_lag1",
+    "log_ret_lag1", "vkospi_change", "vkospi_change_lag1",
     "kospi_ret", "kosdaq_ret",
 ]
 FEATURES_SENTIMENT = FEATURES_BASE + ["sentiment_intraday", "sentiment_overnight"]
