@@ -109,6 +109,14 @@ MARKET_FILE_CONFIG = {
 
 
 MAX_GRANGER_LAG = 3
+MAX_ADF_LAG = 3
+INTRADAY_X_MIN = -0.25
+INTRADAY_X_MAX = 0.20
+
+OVERNIGHT_X_MIN = -0.70
+OVERNIGHT_X_MAX = 0.25
+
+HIST_BINS = 15
 
 
 PRICE_COLUMN_ALIASES = {
@@ -610,12 +618,23 @@ def make_daily_sentiment_histogram(
         figsize=(12, 5),
     )
 
+    intraday_bin_edges = np.linspace(
+        INTRADAY_X_MIN,
+        INTRADAY_X_MAX,
+        HIST_BINS + 1,
+    )
+
     axes[0].hist(
         intraday,
-        bins=20,
+        bins=intraday_bin_edges,
+        color="cornflowerblue",
         edgecolor="black",
-        alpha=0.75,
-        color="#2563EB",
+        alpha=0.9,
+    )
+
+    axes[0].set_xlim(
+        INTRADAY_X_MIN,
+        INTRADAY_X_MAX,
     )
 
     axes[0].axvline(
@@ -630,12 +649,23 @@ def make_daily_sentiment_histogram(
     axes[0].set_xlabel("Daily sentiment index")
     axes[0].set_ylabel("Trading-day count")
 
+    overnight_bin_edges = np.linspace(
+        OVERNIGHT_X_MIN,
+        OVERNIGHT_X_MAX,
+        HIST_BINS + 1,
+    )
+
     axes[1].hist(
         overnight,
-        bins=20,
+        bins=overnight_bin_edges,
+        color="#7C3AED",
         edgecolor="black",
         alpha=0.75,
-        color="#7C3AED",
+    )
+
+    axes[1].set_xlim(
+        OVERNIGHT_X_MIN,
+        OVERNIGHT_X_MAX,
     )
 
     axes[1].axvline(
@@ -649,9 +679,8 @@ def make_daily_sentiment_histogram(
     )
     axes[1].set_xlabel("Daily sentiment index")
     axes[1].set_ylabel("Trading-day count")
-
     fig.tight_layout()
-
+    
     fig.savefig(
         FIGURE_DIR
         / f"daily_sentiment_histogram_{stock_label}.png",
@@ -1041,6 +1070,7 @@ def run_adf(
     try:
         result = adfuller(
             clean,
+            maxlag=MAX_ADF_LAG,
             autolag="AIC",
         )
 
