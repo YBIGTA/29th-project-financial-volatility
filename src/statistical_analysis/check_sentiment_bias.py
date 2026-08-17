@@ -4,7 +4,7 @@ import pandas as pd
 from scipy.stats import binomtest, wilcoxon
 
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
+ROOT_DIR = Path(__file__).resolve().parents[2]
 ANALYSIS_DIR = ROOT_DIR / "data" / "analysis"
 
 FILES = {
