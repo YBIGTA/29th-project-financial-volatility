@@ -1,13 +1,23 @@
 """
-2단계: GARCH(1,1) / GARCH-X 계열 - walk-forward 방식 (v3: 4종목 전체 루프)
+2단계: GARCH 계열 - walk-forward 방식, 3단계 비교 (v5)
 
-[v2 -> v3 변경사항]
-- STOCK_NAME 하나만 처리하던 구조 -> STOCKS 리스트 전체를 순회하도록 변경
-- 로직 자체(walk-forward, 예측 시점 정의, GARCH-X 구현 방식)는 v2와 동일
+[v4 -> v5 변경사항] (팀 리뷰 반영, 8/17)
+- 명칭 확정: "GARCH-X" 대신 "GARCH 예측값 + 감성지수 2단계 회귀"로 통일
+  (arch 패키지가 진짜 GARCH-X(분산방정식에 외생변수 추가)를 지원 안 해서
+   대안으로 회귀를 쓴다는 점을 명칭에서부터 명확히 함)
+- 비교 단계를 2개 -> 3개로 확장. 기존엔 [GARCH(1,1) 자체가 이미 OLS 회귀를 거친 값]
+  vs [+감성지수까지 넣은 회귀값]만 비교해서, 후자가 더 잘 나와도 그게 "감성지수 덕분"인지
+  "OLS 회귀 보정 자체의 효과"인지 구분이 안 되는 문제가 있었음
+  -> 회귀를 전혀 안 거친 "GARCH 원본 예측값"을 0단계로 추가해서 3단계로 비교:
+
+    [1] GARCH 원본        : garch_vol 그 자체를 예측값으로 사용 (회귀 보정 없음)
+    [2] GARCH+회귀(감성없음) : target_vol ~ garch_vol 로 OLS 회귀한 예측값
+    [3] GARCH+회귀(감성포함) : target_vol ~ garch_vol + sentiment_* 로 OLS 회귀한 예측값
+
+  [1]->[2] 차이 = "회귀 보정 자체의 효과", [2]->[3] 차이 = "감성지수 고유의 기여도"로
+  분리해서 해석 가능해짐
 
 [예측 시점 정의] "t+1일 장 시작 직전" (01번 docstring 참고)
-[GARCH-X 구현 방식] arch 패키지 한계로 "GARCH forecast + sentiment 회귀"
-  (encompassing regression) 방식 사용. 팀 합의 필요 (README 참고)
 """
 import json
 import pandas as pd
@@ -55,27 +65,37 @@ def run_pipeline(features_csv: str):
     df.loc[garch_vol_all.index, "garch_vol"] = garch_vol_all.values
 
     tv = df.iloc[MIN_TRAIN:n_trainval].dropna(subset=["garch_vol"]).copy()
+    ho = df.iloc[n_trainval:].copy()
 
+    # ---------------------------------------------------------
+    # [1] GARCH 원본 - 회귀 보정 없이 garch_vol을 그대로 예측값으로 사용
+    # ---------------------------------------------------------
+    metrics_ho_raw = evaluate(ho["target_vol"], ho["garch_vol"])
+
+    # ---------------------------------------------------------
+    # [2] GARCH+회귀(감성없음) - target_vol ~ garch_vol
+    # ---------------------------------------------------------
     X_base = sm.add_constant(tv[["garch_vol"]])
     ols_base = sm.OLS(tv["target_vol"], X_base).fit()
 
-    X_x = sm.add_constant(tv[["garch_vol", "sentiment_intraday", "sentiment_overnight"]])
-    ols_x = sm.OLS(tv["target_vol"], X_x).fit()
-
-    ho = df.iloc[n_trainval:].copy()
-
     X_ho_base = sm.add_constant(ho[["garch_vol"]], has_constant="add")
     pred_ho_base = ols_base.predict(X_ho_base)
+    metrics_ho_base = evaluate(ho["target_vol"], pred_ho_base)
+
+    # ---------------------------------------------------------
+    # [3] GARCH+회귀(감성포함) - target_vol ~ garch_vol + sentiment_*
+    # ---------------------------------------------------------
+    X_x = sm.add_constant(tv[["garch_vol", "sentiment_intraday", "sentiment_overnight"]])
+    ols_x = sm.OLS(tv["target_vol"], X_x).fit()
 
     X_ho_x = sm.add_constant(ho[["garch_vol", "sentiment_intraday", "sentiment_overnight"]],
                               has_constant="add")
     pred_ho_x = ols_x.predict(X_ho_x)
-
-    metrics_ho_base = evaluate(ho["target_vol"], pred_ho_base)
     metrics_ho_x = evaluate(ho["target_vol"], pred_ho_x)
 
     return {
         "ols_base": ols_base, "ols_x": ols_x,
+        "holdout_metrics_raw": metrics_ho_raw,
         "holdout_metrics_base": metrics_ho_base,
         "holdout_metrics_x": metrics_ho_x,
     }
@@ -90,14 +110,16 @@ if __name__ == "__main__":
         print(f"[{stock_name}] 감성지수 계수 유의성 (p-value < 0.05면 유의)")
         print("=" * 60)
         print(result["ols_x"].pvalues[["sentiment_intraday", "sentiment_overnight"]])
-        print(f"홀드아웃 GARCH(1,1)    : {result['holdout_metrics_base']}")
-        print(f"홀드아웃 GARCH-X(+감성) : {result['holdout_metrics_x']}")
+        print(f"홀드아웃 [1] GARCH 원본          : {result['holdout_metrics_raw']}")
+        print(f"홀드아웃 [2] GARCH+회귀(감성없음) : {result['holdout_metrics_base']}")
+        print(f"홀드아웃 [3] GARCH+회귀(감성포함) : {result['holdout_metrics_x']}")
         print()
 
         with open(f"{VOL_DIR}/holdout_metrics_{stock_name}_garch.json", "w") as f:
             json.dump({
-                "GARCH(1,1)": result["holdout_metrics_base"],
-                "GARCH-X": result["holdout_metrics_x"],
+                "GARCH 원본": result["holdout_metrics_raw"],
+                "GARCH+회귀(감성없음)": result["holdout_metrics_base"],
+                "GARCH+회귀(감성포함)": result["holdout_metrics_x"],
             }, f, indent=2)
 
     print("전체 종목 GARCH 계열 실행 완료.")
