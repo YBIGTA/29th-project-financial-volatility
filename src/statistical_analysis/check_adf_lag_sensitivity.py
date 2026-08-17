@@ -5,7 +5,7 @@ import pandas as pd
 from statsmodels.tsa.stattools import adfuller
 
 
-ROOT_DIR = Path(__file__).resolve().parents[1]
+ROOT_DIR = Path(__file__).resolve().parents[2]
 ANALYSIS_DIR = ROOT_DIR / "data" / "analysis"
 
 FILES = {
