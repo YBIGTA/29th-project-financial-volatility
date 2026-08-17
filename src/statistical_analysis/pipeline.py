@@ -1322,6 +1322,17 @@ def run_statistical_checks() -> None:
             .reset_index(drop=True)
         )
 
+        if code == "035720":
+            df["overnight_sentiment_diff"] = (
+                pd.to_numeric(
+                    df[
+                        "overnight_sentiment_ffill"
+                    ],
+                    errors="coerce",
+                )
+                .diff()
+            )
+
         for column in adf_columns:
             if column not in df.columns:
                 continue
@@ -1333,6 +1344,25 @@ def run_statistical_checks() -> None:
                     **run_adf(df[column]),
                 }
             )
+
+        if (
+            code == "035720"
+            and "overnight_sentiment_diff"
+            in df.columns
+        ):
+            adf_rows.append(
+                {
+                    "stock_code": code,
+                    "variable": (
+                        "overnight_sentiment_diff"
+                    ),
+                    **run_adf(
+                        df[
+                            "overnight_sentiment_diff"
+                        ]
+                    ),
+                }
+            )    
 
         market_control = (
             "kospi_change"
@@ -1367,6 +1397,27 @@ def run_statistical_checks() -> None:
                 "night_to_same_day_volatility",
             ),
         ]
+        if code == "035720":
+            ols_specs.extend(
+                [
+                    (
+                        "cc_return",
+                        "overnight_sentiment_diff",
+                        (
+                            "night_diff_to_"
+                            "same_day_return"
+                        ),
+                    ),
+                    (
+                        "parkinson_volatility",
+                        "overnight_sentiment_diff",
+                        (
+                            "night_diff_to_"
+                            "same_day_volatility"
+                        ),
+                    ),
+                ]
+            )
 
         for (
             outcome,
@@ -1414,6 +1465,28 @@ def run_statistical_checks() -> None:
             ),
         ]
 
+        if code == "035720":
+            granger_specs.extend(
+                [
+                    (
+                        "cc_return",
+                        "overnight_sentiment_diff",
+                        (
+                            "past_night_diff_"
+                            "to_return"
+                        ),
+                    ),
+                    (
+                        "parkinson_volatility",
+                        "overnight_sentiment_diff",
+                        (
+                            "past_night_diff_"
+                            "to_volatility"
+                        ),
+                    ),
+                ]
+            )
+            
         for (
             outcome,
             cause,
