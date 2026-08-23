@@ -4,6 +4,8 @@
 - 공백 정리
 - 중복 게시글 제거
 - 너무 짧은 게시글(도배성 한두 글자) 필터링
+- datetime을 "YYYY-MM-DD HH:MM:SS" 형식으로 통일 (소스별 실제 정밀도는 유지 —
+  네이버는 원래 분 단위까지, 통합검색은 날짜 단위까지만 나옴)
 """
 import re
 
@@ -38,6 +40,15 @@ SEVERE_PROFANITY_WORDS = [
 PROFANITY_WORDS = ["놈", "새끼", "병신", "좆", "지랄", "꺼져", "쓰레기", "년놈", "찐따", "장애"]
 SHORT_JUNK_LEN = 15  # 이 길이 이하이면서 욕설이 섞인 글은 분석 대상에서 제외
 
+# 소스마다 실제 시간 정밀도가 초/분/날짜로 제각각이라, 가장 거친 단위인 분 단위로
+# 맞춘다(초는 버림). 토스처럼 재수집을 반복하면서 나노초 꼬리가 붙는 것도 여기서 정리된다.
+DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
+
+
+def normalize_datetime(df: pd.DataFrame, column: str = "datetime") -> pd.DataFrame:
+    df[column] = pd.to_datetime(df[column], format="mixed").dt.floor("min").dt.strftime(DATETIME_FORMAT)
+    return df
+
 
 def is_low_signal(text: str) -> bool:
     if not text:
@@ -66,6 +77,7 @@ def clean_text(text: str) -> str:
 def clean_news(code: str) -> pd.DataFrame:
     name = STOCK_FILE_NAMES[code]
     df = pd.read_csv(RAW_DIR / f"news_{name}.csv", encoding="utf-8-sig")
+    df = normalize_datetime(df)
     df["clean_title"] = df["title"].map(clean_text)
     df["clean_body"] = df["body_snippet"].map(clean_text)
     df = df.drop_duplicates(subset=["clean_title", "clean_body"])
@@ -82,6 +94,7 @@ def clean_naver_search_news(code: str) -> pd.DataFrame:
     if not path.exists():
         return pd.DataFrame(columns=["url", "code", "datetime", "clean_title", "clean_body"])
     df = pd.read_csv(path, encoding="utf-8-sig")
+    df = normalize_datetime(df)
     df["clean_title"] = df["title"].map(clean_text)
     df["clean_body"] = df["body"].map(clean_text)
     df = df.drop_duplicates(subset=["clean_title", "clean_body"])
@@ -91,9 +104,27 @@ def clean_naver_search_news(code: str) -> pd.DataFrame:
     return df
 
 
+def clean_mk_news(code: str) -> pd.DataFrame:
+    """crawl_mk_news.py 결과 정제 — 직접 실행하지 않은 경우 파일이 없을 수 있어 건너뜀."""
+    name = STOCK_FILE_NAMES[code]
+    path = RAW_DIR / f"mk_news_{name}.csv"
+    if not path.exists():
+        return pd.DataFrame(columns=["news_id", "datetime", "clean_headline", "clean_body"])
+    df = pd.read_csv(path, encoding="utf-8-sig")
+    df = normalize_datetime(df)
+    df["clean_headline"] = df["headline"].map(clean_text)
+    df["clean_body"] = df["body"].map(clean_text)
+    df = df.drop_duplicates(subset=["clean_headline", "clean_body"])
+    df = df[df["clean_headline"].str.len() > 0]
+    out_path = PROCESSED_DIR / f"mk_news_{name}_clean.csv"
+    df.to_csv(out_path, index=False, encoding="utf-8-sig")
+    return df
+
+
 def clean_board(code: str) -> pd.DataFrame:
     name = STOCK_FILE_NAMES[code]
     df = pd.read_csv(RAW_DIR / f"board_{name}.csv", encoding="utf-8-sig")
+    df = normalize_datetime(df)
     df["clean_title"] = df["title"].map(clean_text)
     df = df.drop_duplicates(subset=["clean_title", "author", "datetime"])
     df = df[df["clean_title"].str.len() >= MIN_BOARD_TITLE_LEN]
@@ -106,6 +137,7 @@ def clean_board(code: str) -> pd.DataFrame:
 def clean_paxnet_board(code: str) -> pd.DataFrame:
     name = STOCK_FILE_NAMES[code]
     df = pd.read_csv(RAW_DIR / f"paxnet_board_{name}.csv", encoding="utf-8-sig")
+    df = normalize_datetime(df)
     df["clean_title"] = df["title"].map(clean_text)
     df = df.drop_duplicates(subset=["clean_title", "author", "datetime"])
     df = df[df["clean_title"].str.len() >= MIN_BOARD_TITLE_LEN]
@@ -118,6 +150,7 @@ def clean_paxnet_board(code: str) -> pd.DataFrame:
 def clean_edaily_news(code: str) -> pd.DataFrame:
     name = STOCK_FILE_NAMES[code]
     df = pd.read_csv(RAW_DIR / f"edaily_news_{name}.csv", encoding="utf-8-sig")
+    df = normalize_datetime(df)
     df["clean_headline"] = df["headline"].map(clean_text)
     df["clean_body"] = df["body"].map(clean_text)
     df = df.drop_duplicates(subset=["clean_headline", "clean_body"])
@@ -133,6 +166,7 @@ MIN_TOSS_LIKES = 1  # 추천 0인 글은 노이즈일 가능성이 높아 제외
 def clean_toss_community(code: str) -> pd.DataFrame:
     name = STOCK_FILE_NAMES[code]
     df = pd.read_csv(RAW_DIR / f"toss_community_{name}.csv", encoding="utf-8-sig")
+    df = normalize_datetime(df)
     df["clean_message"] = df["message"].map(clean_text)
     df = df.drop_duplicates(subset=["clean_message", "author", "datetime"])
     df = df[df["clean_message"].str.len() >= MIN_BOARD_TITLE_LEN]
@@ -155,9 +189,11 @@ def main():
         edaily_df = clean_edaily_news(code)
         toss_df = clean_toss_community(code)
         search_df = clean_naver_search_news(code)
+        mk_df = clean_mk_news(code)
         print(
             f"[clean] {code} {name}: naver news {len(news_df)}건, naver board {len(board_df)}건, "
-            f"edaily news {len(edaily_df)}건, toss {len(toss_df)}건, naver search {len(search_df)}건"
+            f"edaily news {len(edaily_df)}건, toss {len(toss_df)}건, naver search {len(search_df)}건, "
+            f"mk news {len(mk_df)}건"
         )
 
     for code in PAXNET_VALID_CODES:
