@@ -30,7 +30,13 @@ import requests
 
 from config import RAW_DIR, REQUEST_DELAY_SEC, START_DATE, STOCK_FILE_NAMES, STOCKS, USER_AGENT
 
-HEADERS = {"User-Agent": USER_AGENT}
+HEADERS = {
+    "User-Agent": USER_AGENT,
+    "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
+    "Accept-Language": "ko-KR,ko;q=0.9,en-US;q=0.8,en;q=0.7",
+    "X-Requested-With": "XMLHttpRequest",
+}
+SEARCH_PAGE_URL = "https://www.mk.co.kr/search"
 SEARCH_API = "https://www.mk.co.kr/_CP/243"
 
 NETWORK_RETRIES = 5
@@ -50,10 +56,16 @@ class BlockedOrChangedPageError(RuntimeError):
     """페이지 구조가 바뀌었거나 접근이 막혔을 때 -- 조용히 0건으로 넘어가지 않고 여기서 멈춘다."""
 
 
-def _get_with_retries(params: dict) -> requests.Response:
+def _new_session() -> requests.Session:
+    session = requests.Session()
+    session.headers.update(HEADERS)
+    return session
+
+
+def _get_with_retries(session: requests.Session, url: str, params: dict) -> requests.Response:
     for attempt in range(1, NETWORK_RETRIES + 1):
         try:
-            resp = requests.get(SEARCH_API, params=params, headers=HEADERS, timeout=10)
+            resp = session.get(url, params=params, timeout=10)
             resp.raise_for_status()
             return resp
         except requests.exceptions.RequestException as e:
@@ -63,8 +75,12 @@ def _get_with_retries(params: dict) -> requests.Response:
             time.sleep(NETWORK_RETRY_WAIT_SEC)
 
 
-def fetch_search_page(query: str, page: int) -> list[dict]:
-    resp = _get_with_retries({"word": query, "page": page, "highlight": "Y", "page_size": "null", "id": "null"})
+def fetch_search_page(session: requests.Session, query: str, page: int) -> list[dict]:
+    # _CP/243은 검색 페이지 안에서만 호출되는 내부 위젯 API라, 세션/쿠키 없이 단독으로
+    # 부르면 404가 난다 -- 실제 검색 페이지를 먼저 열어서 쿠키를 받아온 뒤에 호출해야 한다.
+    resp = _get_with_retries(
+        session, SEARCH_API, {"word": query, "page": page, "highlight": "Y", "page_size": "null", "id": "null"}
+    )
     matches = BLOCK_RE.finditer(resp.text)
     rows = [
         {
@@ -86,9 +102,13 @@ def fetch_search_page(query: str, page: int) -> list[dict]:
 
 
 def crawl_query(query: str) -> pd.DataFrame:
+    session = _new_session()
+    _get_with_retries(session, SEARCH_PAGE_URL, {"word": query})  # 쿠키 확보용 -- 결과는 안 씀
+    time.sleep(REQUEST_DELAY_SEC)
+
     rows: list[dict] = []
     for page in range(1, MAX_PAGE + 1):
-        page_rows = fetch_search_page(query, page)
+        page_rows = fetch_search_page(session, query, page)
         if not page_rows:
             break
         rows.extend(page_rows)
