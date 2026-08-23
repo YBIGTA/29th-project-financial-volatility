@@ -62,10 +62,11 @@ def _new_session() -> requests.Session:
     return session
 
 
-def _get_with_retries(session: requests.Session, url: str, params: dict) -> requests.Response:
+def _get_with_retries(session: requests.Session, url: str, params: dict, referer: str | None = None) -> requests.Response:
+    headers = {"Referer": referer} if referer else {}
     for attempt in range(1, NETWORK_RETRIES + 1):
         try:
-            resp = session.get(url, params=params, timeout=10)
+            resp = session.get(url, params=params, headers=headers, timeout=10)
             resp.raise_for_status()
             return resp
         except requests.exceptions.RequestException as e:
@@ -76,10 +77,13 @@ def _get_with_retries(session: requests.Session, url: str, params: dict) -> requ
 
 
 def fetch_search_page(session: requests.Session, query: str, page: int) -> list[dict]:
-    # _CP/243은 검색 페이지 안에서만 호출되는 내부 위젯 API라, 세션/쿠키 없이 단독으로
-    # 부르면 404가 난다 -- 실제 검색 페이지를 먼저 열어서 쿠키를 받아온 뒤에 호출해야 한다.
+    # _CP/243은 검색 페이지 안에서만 호출되는 내부 위젯 API라, 세션/쿠키만으로는 부족하고
+    # 그 검색 페이지를 참조(Referer)로 왔다는 것까지 보여줘야 404가 안 난다.
     resp = _get_with_retries(
-        session, SEARCH_API, {"word": query, "page": page, "highlight": "Y", "page_size": "null", "id": "null"}
+        session,
+        SEARCH_API,
+        {"word": query, "page": page, "highlight": "Y", "page_size": "null", "id": "null"},
+        referer=f"{SEARCH_PAGE_URL}?word={requests.utils.quote(query)}",
     )
     matches = BLOCK_RE.finditer(resp.text)
     rows = [
