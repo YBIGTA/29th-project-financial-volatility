@@ -38,7 +38,7 @@ PRICE_FILE_NAMES = {
 }
 
 END_DATE = datetime.today().date()
-START_DATE = END_DATE - timedelta(days=90)
+START_DATE = END_DATE - timedelta(days=180)
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT_DIR / "data" / "raw"
