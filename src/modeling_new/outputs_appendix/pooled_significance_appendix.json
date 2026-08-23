@@ -1,0 +1,23 @@
+{
+  "garch_raw_vs_sent": {
+    "n_dates": 10,
+    "pooled_hac_t_stat": -5.7458117755949765,
+    "pooled_hac_t_p": 0.00027775838489141336,
+    "wins_model2": 2,
+    "sign_test_p": 0.109375
+  },
+  "garch_pure_sent_contribution": {
+    "n_dates": 10,
+    "pooled_hac_t_stat": -2.096189019919198,
+    "pooled_hac_t_p": 0.06552220899507843,
+    "wins_model2": 2,
+    "sign_test_p": 0.109375
+  },
+  "xgb_base_vs_sent": {
+    "n_dates": 10,
+    "pooled_hac_t_stat": 0.12251176021982364,
+    "pooled_hac_t_p": 0.9051857949363158,
+    "wins_model2": 5,
+    "sign_test_p": 1.0
+  }
+}
