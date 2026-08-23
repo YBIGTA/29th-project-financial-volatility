@@ -1,0 +1,5 @@
+종목,n_usable,n_holdout,GARCH 원본,GARCH+회귀(감성없음),"GARCH+회귀(감성포함,4변수)",XGBoost base,XGBoost +sentiment(4변수)
+samsung_electronics,50,10,0.0462,0.019,0.021,0.0164,0.0185
+sk_hynix,50,10,0.0624,0.0222,0.0162,0.0176,0.0158
+kakao,50,10,0.0076,0.009,0.0103,0.009,0.01
+ecopro_bm,50,10,0.0237,0.014,0.0205,0.0134,0.0128

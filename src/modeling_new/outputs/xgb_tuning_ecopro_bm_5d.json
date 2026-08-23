@@ -1,0 +1,24 @@
+{
+  "best_params_base": {
+    "random_state": 42,
+    "subsample": 0.9,
+    "reg_lambda": 5,
+    "n_estimators": 100,
+    "min_child_weight": 5,
+    "max_depth": 2,
+    "learning_rate": 0.05,
+    "colsample_bytree": 0.8
+  },
+  "best_params_sent": {
+    "random_state": 42,
+    "subsample": 0.9,
+    "reg_lambda": 10,
+    "n_estimators": 50,
+    "min_child_weight": 5,
+    "max_depth": 2,
+    "learning_rate": 0.1,
+    "colsample_bytree": 0.8
+  },
+  "cv_rmse_base": 0.015311007549260488,
+  "cv_rmse_sent": 0.01629414976910647
+}

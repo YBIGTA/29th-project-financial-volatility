@@ -1,0 +1,204 @@
+{
+  "pk": {
+    "garch_raw_vs_sentreg_pooled": {
+      "n_dates": 15,
+      "pooled_hac_t_stat": 3.216202290906018,
+      "pooled_hac_t_p": 0.006216938540926753,
+      "date_level_wins_for_model2": 13,
+      "sign_test_p": 0.00738525390625
+    },
+    "garch_base_vs_sentreg_pooled(\uc21c\uc218\uac10\uc131\uae30\uc5ec\ub3c4)": {
+      "n_dates": 15,
+      "pooled_hac_t_stat": 0.19692425129246857,
+      "pooled_hac_t_p": 0.8467170210650115,
+      "date_level_wins_for_model2": 7,
+      "sign_test_p": 1.0
+    },
+    "xgb_base_vs_sent_pooled": {
+      "n_dates": 15,
+      "pooled_hac_t_stat": -1.954283082298713,
+      "pooled_hac_t_p": 0.07094074834811437,
+      "date_level_wins_for_model2": 5,
+      "sign_test_p": 0.30175781249999994
+    },
+    "garch_dm_per_stock_hac": {
+      "samsung_electronics": {
+        "dm_stat": 2.7847394602424784,
+        "p_value": 0.014612549195326618,
+        "n": 15,
+        "maxlag": 1
+      },
+      "sk_hynix": {
+        "dm_stat": 3.690629945350767,
+        "p_value": 0.002421840726352986,
+        "n": 15,
+        "maxlag": 1
+      },
+      "kakao": {
+        "dm_stat": -1.7528355735648968,
+        "p_value": 0.10149011391988272,
+        "n": 15,
+        "maxlag": 1
+      },
+      "ecopro_bm": {
+        "dm_stat": 1.355257615220955,
+        "p_value": 0.19679912655055154,
+        "n": 15,
+        "maxlag": 1
+      }
+    },
+    "garch_dm_pure_sent_per_stock_hac": {
+      "samsung_electronics": {
+        "dm_stat": 1.1530945302134061,
+        "p_value": 0.2681795278593202,
+        "n": 15,
+        "maxlag": 1
+      },
+      "sk_hynix": {
+        "dm_stat": 0.7481458411900667,
+        "p_value": 0.4667549740967474,
+        "n": 15,
+        "maxlag": 1
+      },
+      "kakao": {
+        "dm_stat": -1.089870305380981,
+        "p_value": 0.2941745838464671,
+        "n": 15,
+        "maxlag": 1
+      },
+      "ecopro_bm": {
+        "dm_stat": -0.2508758817343338,
+        "p_value": 0.8055546367625297,
+        "n": 15,
+        "maxlag": 1
+      }
+    },
+    "xgb_dm_per_stock_hac": {
+      "samsung_electronics": {
+        "dm_stat": -2.707797053800896,
+        "p_value": 0.016995105191119908,
+        "n": 15,
+        "maxlag": 1
+      },
+      "sk_hynix": {
+        "dm_stat": -1.005675651086472,
+        "p_value": 0.3316380192812014,
+        "n": 15,
+        "maxlag": 1
+      },
+      "kakao": {
+        "dm_stat": -2.189140832895213,
+        "p_value": 0.046027072168820515,
+        "n": 15,
+        "maxlag": 1
+      },
+      "ecopro_bm": {
+        "dm_stat": 1.5084199965094884,
+        "p_value": 0.1536798071041925,
+        "n": 15,
+        "maxlag": 1
+      }
+    }
+  },
+  "5d": {
+    "garch_raw_vs_sentreg_pooled": {
+      "n_dates": 15,
+      "pooled_hac_t_stat": -1.5262604312164785,
+      "pooled_hac_t_p": 0.149216121336591,
+      "date_level_wins_for_model2": 5,
+      "sign_test_p": 0.30175781249999994
+    },
+    "garch_base_vs_sentreg_pooled(\uc21c\uc218\uac10\uc131\uae30\uc5ec\ub3c4)": {
+      "n_dates": 15,
+      "pooled_hac_t_stat": -1.9498277922134242,
+      "pooled_hac_t_p": 0.07151480378587372,
+      "date_level_wins_for_model2": 4,
+      "sign_test_p": 0.11846923828124999
+    },
+    "xgb_base_vs_sent_pooled": {
+      "n_dates": 15,
+      "pooled_hac_t_stat": -0.44445218166478906,
+      "pooled_hac_t_p": 0.6635090467835472,
+      "date_level_wins_for_model2": 7,
+      "sign_test_p": 1.0
+    },
+    "garch_dm_per_stock_hac": {
+      "samsung_electronics": {
+        "dm_stat": -0.44263921367126124,
+        "p_value": 0.6647888071440673,
+        "n": 15,
+        "maxlag": 4
+      },
+      "sk_hynix": {
+        "dm_stat": -0.5693477980354341,
+        "p_value": 0.5781413226176637,
+        "n": 15,
+        "maxlag": 4
+      },
+      "kakao": {
+        "dm_stat": -1.783461605034208,
+        "p_value": 0.0961960691673116,
+        "n": 15,
+        "maxlag": 4
+      },
+      "ecopro_bm": {
+        "dm_stat": -1.4282142656477177,
+        "p_value": 0.17515807548673523,
+        "n": 15,
+        "maxlag": 4
+      }
+    },
+    "garch_dm_pure_sent_per_stock_hac": {
+      "samsung_electronics": {
+        "dm_stat": -0.6012987291285411,
+        "p_value": 0.5572525094467775,
+        "n": 15,
+        "maxlag": 4
+      },
+      "sk_hynix": {
+        "dm_stat": 0.0412608499609729,
+        "p_value": 0.9676706093781375,
+        "n": 15,
+        "maxlag": 4
+      },
+      "kakao": {
+        "dm_stat": -1.8298058635139964,
+        "p_value": 0.08865078364872891,
+        "n": 15,
+        "maxlag": 4
+      },
+      "ecopro_bm": {
+        "dm_stat": -2.69505347413827,
+        "p_value": 0.01742460007666935,
+        "n": 15,
+        "maxlag": 4
+      }
+    },
+    "xgb_dm_per_stock_hac": {
+      "samsung_electronics": {
+        "dm_stat": 0.35040577204510703,
+        "p_value": 0.7312503730504458,
+        "n": 15,
+        "maxlag": 4
+      },
+      "sk_hynix": {
+        "dm_stat": 0.6454382321260017,
+        "p_value": 0.5290801776023599,
+        "n": 15,
+        "maxlag": 4
+      },
+      "kakao": {
+        "dm_stat": -0.2995744044946183,
+        "p_value": 0.768903323545908,
+        "n": 15,
+        "maxlag": 4
+      },
+      "ecopro_bm": {
+        "dm_stat": -1.8579026309475337,
+        "p_value": 0.08433802720391781,
+        "n": 15,
+        "maxlag": 4
+      }
+    }
+  }
+}
