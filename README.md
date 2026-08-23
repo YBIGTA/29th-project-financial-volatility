@@ -104,6 +104,7 @@ python preprocess.py   # news_search_{종목}_clean.csv까지 같이 정제됨
 | 한국경제 (hankyung.com) | robots.txt는 허용이지만 Cloudflare 봇 차단 — 접근 자체가 안 됨 |
 | 조선비즈 (biz.chosun.com) | 기사 목록이 JS로 나중에 그려지는 방식이라 일반 요청으론 안 보임 |
 | 매일경제 (mk.co.kr) | robots.txt는 ClaudeBot만 이름으로 막아서 직접 실행 크롤러(`crawl_mk_news.py`)까지 만들었으나, 검색 API가 **Cloudflare 봇 관리 쿠키**(`__cf_bm`/`_cfuvid`)를 요구하는 걸 확인 — 헤더·세션·Referer를 다 맞춰도 우회 불가라 한국경제와 같은 이유로 폐기. 관련 코드·데이터 전부 삭제함 |
+| 아시아경제 (asiae.co.kr) | 보수 성향, robots.txt·Cloudflare 문제 없어서 크롤러(`crawl_asiae_news.py`)까지 만들어 자동 실행했으나, "더보기" 내부 API(`news2011/include/list/news_more.php`)가 9페이지(약 4~5일치)에서 서버가 종료 신호(`10`)를 보내고 그 이후로는 같은 페이지만 반복됨 — 사이트 내 검색도 페이지를 넘겨도 항상 최근 2주치만 나와서 동일한 한계. 이데일리 대체용으로 쓰기엔 깊이가 부족해 폐기, 코드·데이터 삭제함 |
 
 현재 **동아일보(donga.com)**를 확인 중입니다 — "조중동" 중 하나로 분류되는 보수 성향 신문이고, robots.txt·Cloudflare 둘 다 문제없이 통과, 경제 섹션 페이지도 서버 렌더링(JS 불필요)이라 가장 가능성이 높습니다.
 
@@ -143,6 +144,7 @@ GET https://wts-cert-api.tossinvest.com/api/v4/comments
 | 네이버 뉴스/종목토론방 (API) | robots.txt상 봇 접근이 막혀있어서 기존 수집분만 참고용으로 유지, 추가 수집은 보류 |
 | 네이버 통합검색 뉴스 (`search.naver.com`) | robots.txt 전면 차단 — 코드는 준비해뒀지만 직접 실행해야 함 (위 참고) |
 | 매일경제 (mk.co.kr) | robots.txt는 우회 가능했지만 검색 API 자체가 Cloudflare 봇 관리 쿠키를 요구해서 접근 불가 (위 참고, 코드·데이터 삭제) |
+| 아시아경제 (asiae.co.kr) | 접근은 되지만 목록/검색 API가 최근 4~5일치로 캡 걸려있어 6개월 소급이 안 됨 (위 참고, 코드·데이터 삭제) |
 | 한국경제 (hankyung.com) | robots.txt는 허용이지만 Cloudflare 봇 차단으로 접근 자체가 안 됨 |
 | 조선비즈 (biz.chosun.com) | robots.txt는 허용이지만 기사 목록이 JS 렌더링이라 일반 요청으론 안 보임 |
 | 연합뉴스, 디시인사이드, 씽크풀 | robots.txt에 크롤러 봇 차단이 명시돼있어서 손대지 않음 |
