@@ -9,7 +9,15 @@ import time
 import pandas as pd
 import requests
 
-from config import NAVER_MAX_PAGE, RAW_DIR, REQUEST_DELAY_SEC, STOCK_FILE_NAMES, STOCKS, USER_AGENT
+from config import (
+    NAVER_MAX_PAGE,
+    RAW_DIR,
+    REQUEST_DELAY_SEC,
+    STOCK_ENGLISH_NAMES,
+    STOCK_FILE_NAMES,
+    STOCKS,
+    USER_AGENT,
+)
 
 HEADERS = {"User-Agent": USER_AGENT}
 API_URL = "https://m.stock.naver.com/api/news/stock/{code}"
@@ -30,14 +38,22 @@ def fetch_news_page(code: str, page: int, page_size: int = 20) -> list[dict]:
     return items
 
 
-def crawl_news(code: str, max_page: int = NAVER_MAX_PAGE) -> pd.DataFrame:
+def crawl_news(code: str, known_ids: set[str] | None = None, max_page: int = NAVER_MAX_PAGE) -> pd.DataFrame:
+    """최신 페이지부터 읽고, 한 페이지 전체가 기존 ID이면 수집을 종료한다."""
+    known_ids = known_ids or set()
     all_items = []
     for page in range(1, max_page + 1):
         items = fetch_news_page(code, page)
         if not items:
             break
-        all_items.extend(items)
+        new_items = [item for item in items if str(item["id"]) not in known_ids]
+        all_items.extend(new_items)
+        if known_ids and not new_items:
+            print(f"[news] {code}: 기존 데이터 도달(page={page}), 증분 수집 종료")
+            break
         time.sleep(REQUEST_DELAY_SEC)
+    else:
+        print(f"[news] {code}: {max_page}페이지 상한 도달 — 실행 사이에 2,000건 이상 등록됐을 수 있습니다.")
 
     if not all_items:
         return pd.DataFrame(
@@ -45,27 +61,34 @@ def crawl_news(code: str, max_page: int = NAVER_MAX_PAGE) -> pd.DataFrame:
         )
 
     df = pd.DataFrame(all_items)
-    df["code"] = code
+    df["code"] = STOCK_ENGLISH_NAMES[code]
     df["datetime"] = pd.to_datetime(df["datetime"], format="%Y%m%d%H%M")
     df = df.rename(columns={"officeName": "office_name", "body": "body_snippet", "mobileNewsUrl": "url"})
     return df[["id", "code", "datetime", "office_name", "title", "body_snippet", "url"]]
 
 
 def crawl_and_save(code: str) -> pd.DataFrame:
-    new_df = crawl_news(code)
     out_path = RAW_DIR / f"news_{STOCK_FILE_NAMES[code]}.csv"
-
-    new_df["id"] = new_df["id"].astype(str)
 
     if out_path.exists():
         old_df = pd.read_csv(out_path, encoding="utf-8-sig", dtype={"id": str})
         old_df["datetime"] = pd.to_datetime(old_df["datetime"])
+        known_ids = set(old_df["id"])
+    else:
+        old_df = pd.DataFrame()
+        known_ids = set()
+
+    new_df = crawl_news(code, known_ids=known_ids)
+    new_df["id"] = new_df["id"].astype(str)
+
+    if len(old_df):
         combined = pd.concat([old_df, new_df], ignore_index=True)
         combined = combined.drop_duplicates(subset="id").sort_values("datetime")
     else:
         combined = new_df.sort_values("datetime")
 
     combined.to_csv(out_path, index=False, encoding="utf-8-sig")
+    print(f"[news] {code}: 신규 {len(new_df)}건 추가")
     return combined
 
 

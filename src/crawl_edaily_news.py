@@ -12,11 +12,13 @@ from datetime import timedelta
 import pandas as pd
 import requests
 
-from config import END_DATE, PROCESSED_DIR, RAW_DIR, REQUEST_DELAY_SEC, START_DATE, STOCK_FILE_NAMES, STOCKS, USER_AGENT
+from config import END_DATE, PROCESSED_DIR, REQUEST_DELAY_SEC, SIX_MONTH_RAW_DIR, START_DATE, STOCK_FILE_NAMES, STOCKS, USER_AGENT
 
 HEADERS = {"User-Agent": USER_AGENT}
 API_URL = "https://www.edaily.co.kr/article/MoreList"
 CATEGORY_STOCK = 16100
+OUTPUT_DIR = SIX_MONTH_RAW_DIR
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 HTML_TAG_RE = re.compile(r"<[^>]+>")
 EPOCH_MS_RE = re.compile(r"(\d+)")
 
@@ -29,12 +31,21 @@ def parse_confirm_date(value: str) -> pd.Timestamp:
 def fetch_day(date_str: str, max_page: int = 30) -> list[dict]:
     items = []
     for page in range(1, max_page + 1):
-        resp = requests.get(
-            API_URL,
-            params={"categoryCode": CATEGORY_STOCK, "page": page, "pagesize": 20, "date": date_str},
-            headers=HEADERS,
-            timeout=10,
-        )
+        for attempt in range(1, 6):
+            try:
+                resp = requests.get(
+                    API_URL,
+                    params={"categoryCode": CATEGORY_STOCK, "page": page, "pagesize": 20, "date": date_str},
+                    headers=HEADERS,
+                    timeout=20,
+                )
+                resp.raise_for_status()
+                break
+            except requests.RequestException:
+                if attempt == 5:
+                    raise
+                print(f"[edaily] {date_str} page={page} 요청 실패, 재시도 {attempt}/5")
+                time.sleep(attempt * 5)
         data = resp.json()
         if not data:
             break
@@ -76,13 +87,13 @@ def split_by_stock(df: pd.DataFrame) -> dict[str, pd.DataFrame]:
 
 def main():
     all_df = crawl_all_days()
-    all_df.to_csv(RAW_DIR / "edaily_stock_all.csv", index=False, encoding="utf-8-sig")
+    all_df.to_csv(OUTPUT_DIR / "edaily_stock_all.csv", index=False, encoding="utf-8-sig")
     print(f"[edaily] 증권 섹션 전체 {len(all_df)}건 수집 ({START_DATE} ~ {END_DATE})")
 
     by_stock = split_by_stock(all_df)
     for code, name in STOCKS.items():
         df = by_stock[code]
-        out_path = RAW_DIR / f"edaily_news_{STOCK_FILE_NAMES[code]}.csv"
+        out_path = OUTPUT_DIR / f"edaily_news_{STOCK_FILE_NAMES[code]}.csv"
         df.to_csv(out_path, index=False, encoding="utf-8-sig")
         span = f"{df['datetime'].min()} ~ {df['datetime'].max()}" if len(df) else "no data"
         print(f"[edaily] {code} {name}: {len(df)}건 ({span})")

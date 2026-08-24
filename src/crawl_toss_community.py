@@ -22,10 +22,12 @@ import time
 import pandas as pd
 import requests
 
-from config import END_DATE, RAW_DIR, REQUEST_DELAY_SEC, START_DATE, STOCK_FILE_NAMES, STOCKS, USER_AGENT
+from config import END_DATE, REQUEST_DELAY_SEC, SIX_MONTH_RAW_DIR, START_DATE, STOCK_FILE_NAMES, STOCKS, USER_AGENT
 
 HEADERS = {"User-Agent": USER_AGENT}
 API_URL = "https://wts-cert-api.tossinvest.com/api/v4/comments"
+OUTPUT_DIR = SIX_MONTH_RAW_DIR
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
 
 # 6자리 종목코드 -> ISIN (wts-cert-api의 subjectId 형식)
 ISIN = {
@@ -240,7 +242,7 @@ def crawl_comments_sampled(code: str) -> pd.DataFrame:
 def crawl_and_save(code: str, sampled: bool = False) -> pd.DataFrame:
     new_df = crawl_comments_sampled(code) if sampled else crawl_comments(code)
     new_df["comment_id"] = new_df["comment_id"].astype(str)
-    out_path = RAW_DIR / f"toss_community_{STOCK_FILE_NAMES[code]}.csv"
+    out_path = OUTPUT_DIR / f"toss_community_{STOCK_FILE_NAMES[code]}.csv"
 
     if out_path.exists():
         old_df = pd.read_csv(out_path, encoding="utf-8-sig", dtype={"comment_id": str})

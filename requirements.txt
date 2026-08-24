@@ -6,9 +6,11 @@ lxml>=5.0
 matplotlib>=3.8
 
 # sentiment_score.py (Track B 감성분석) — torch CPU wheel + 모델 가중치 합쳐 1GB+ 필요
-torch
-transformers
+torch>=2.7
+transformers>=4.48,<5
 sentencepiece
+scikit-learn>=1.5
+tqdm>=4.66
 
 numpy>=1.26
 statsmodels>=0.14

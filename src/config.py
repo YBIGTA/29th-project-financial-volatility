@@ -43,8 +43,15 @@ START_DATE = END_DATE - timedelta(days=180)
 ROOT_DIR = Path(__file__).resolve().parent.parent
 RAW_DIR = ROOT_DIR / "data" / "raw"
 PROCESSED_DIR = ROOT_DIR / "data" / "processed"
+SIX_MONTH_DIR = ROOT_DIR / "data" / "6개월"
+SIX_MONTH_RAW_DIR = SIX_MONTH_DIR / "raw"
+SIX_MONTH_PROCESSED_DIR = SIX_MONTH_DIR / "processed"
+SIX_MONTH_SUMMARY_DIR = SIX_MONTH_DIR / "정리"
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+SIX_MONTH_RAW_DIR.mkdir(parents=True, exist_ok=True)
+SIX_MONTH_PROCESSED_DIR.mkdir(parents=True, exist_ok=True)
+SIX_MONTH_SUMMARY_DIR.mkdir(parents=True, exist_ok=True)
 
 USER_AGENT = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -52,6 +59,6 @@ USER_AGENT = (
 )
 REQUEST_DELAY_SEC = 0.5
 
-# Naver news/board API는 페이지당 20건, 최대 100페이지(약 2000건)까지만 열람 가능.
-# 종목 게시량이 많을수록(삼성전자 등) 실제로 소급되는 기간이 짧아짐 — README 참고.
+# 네이버 최신분 증분 수집에서 한 번에 확인할 안전 상한.
+# 게시판 3개월 백필(run_board_backfill.py)은 이 값을 쓰지 않고 실제 다음 링크를 따라간다.
 NAVER_MAX_PAGE = 100

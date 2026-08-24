@@ -10,10 +10,13 @@ import time
 import pandas as pd
 import requests
 
-from config import PROCESSED_DIR, RAW_DIR, REQUEST_DELAY_SEC, START_DATE, STOCK_FILE_NAMES, STOCKS, USER_AGENT
+from config import PROCESSED_DIR, REQUEST_DELAY_SEC, SIX_MONTH_RAW_DIR, START_DATE, STOCK_FILE_NAMES, STOCKS, USER_AGENT
 
 HEADERS = {"User-Agent": USER_AGENT}
 LIST_URL = "https://www.paxnet.co.kr/tbbs/list"
+OUTPUT_DIR = SIX_MONTH_RAW_DIR
+OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
+PAXNET_CODES = ("005930", "000660")
 
 ROW_RE = re.compile(
     r'data-seq="(?P<seq>\d+)".*?'
@@ -27,7 +30,21 @@ ROW_RE = re.compile(
 
 
 def fetch_board_page(code: str, page: int) -> list[dict]:
-    resp = requests.get(LIST_URL, params={"tbbsType": "L", "id": code, "page": page}, headers=HEADERS, timeout=10)
+    for attempt in range(1, 6):
+        try:
+            resp = requests.get(
+                LIST_URL,
+                params={"tbbsType": "L", "id": code, "page": page},
+                headers=HEADERS,
+                timeout=20,
+            )
+            resp.raise_for_status()
+            break
+        except requests.RequestException:
+            if attempt == 5:
+                raise
+            print(f"[paxnet] {code} page={page} 요청 실패, 재시도 {attempt}/5")
+            time.sleep(attempt * 5)
     rows = []
     for m in ROW_RE.finditer(resp.text):
         title = re.sub(r"<[^>]+>", "", m.group("title")).strip()
@@ -53,6 +70,8 @@ def crawl_board(code: str, max_page: int = 500) -> pd.DataFrame:
         if not rows:
             break
         all_rows.extend(rows)
+        if page % 50 == 0:
+            print(f"[paxnet] {code}: {page}페이지, {len(all_rows)}건 수집 중")
         if rows[-1]["datetime"].date() < START_DATE:
             break
         time.sleep(REQUEST_DELAY_SEC)
@@ -68,13 +87,14 @@ def crawl_board(code: str, max_page: int = 500) -> pd.DataFrame:
 
 def crawl_and_save(code: str) -> pd.DataFrame:
     df = crawl_board(code)
-    out_path = RAW_DIR / f"paxnet_board_{STOCK_FILE_NAMES[code]}.csv"
+    out_path = OUTPUT_DIR / f"paxnet_board_{STOCK_FILE_NAMES[code]}.csv"
     df.to_csv(out_path, index=False, encoding="utf-8-sig")
     return df
 
 
 def main():
-    for code, name in STOCKS.items():
+    for code in PAXNET_CODES:
+        name = STOCKS[code]
         df = crawl_and_save(code)
         span = f"{df['datetime'].min()} ~ {df['datetime'].max()}" if len(df) else "no data"
         print(f"[paxnet board] {code} {name}: {len(df)}건 ({span})")

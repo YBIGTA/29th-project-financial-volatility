@@ -4,10 +4,11 @@
 모델: snunlp/KR-FinBert-SC (서울대 NLP연구실이 만든 한국어 금융 뉴스 3-class 감성분류기,
       긍정/부정/중립). Hugging Face에서 최초 실행 시 자동 다운로드.
 
-카카오·에코프로비엠처럼 이데일리 뉴스만으로는 하루 기사 수가 너무 적어 날짜가 듬성듬성
-빠지는 문제가 있어서, **한 소스에 의존하지 않고 지금까지 모은 모든 텍스트 소스**
-(이데일리 뉴스, 네이버 뉴스, 네이버 게시판, 토스 커뮤니티, 팍스넷 게시판(삼성/SK하이닉스))를
-합쳐서 스코어링한다. 스코어링 결과는 실제 거래일을 기준으로 장중과 장외로 나눠 집계한다.
+종목별 수집 기간이 일치하는 소스만 합쳐서 스코어링한다. 삼성전자·SK하이닉스는
+이데일리·토스·팍스넷을 사용하고, 카카오·에코프로비엠은 이데일리·토스를 사용한다.
+네이버 게시판은 통합 지수에서 제외하고 종목별 별도 점수 파일로 저장하며,
+과거 수집이 불완전한 네이버 뉴스는 모든 종목에서 제외한다.
+스코어링 결과는 실제 거래일을 기준으로 장중과 장외로 나눠 집계한다.
 장중(09:00 이상 15:30 미만)은 같은 거래일에, 장외(15:30 이후 및 다음 거래일 09:00 이전)는
 다음 거래일에 귀속한다. 주말과 휴장일 게시물도 다음 거래일 장외 지수에 포함한다.
 
@@ -25,14 +26,29 @@ import pandas as pd
 from config import (
     PROCESSED_DIR,
     RAW_DIR,
+    SIX_MONTH_PROCESSED_DIR,
+    SIX_MONTH_RAW_DIR,
     STOCKS,
     STOCK_ENGLISH_NAMES,
     STOCK_FILE_NAMES,
 )
 
+INPUT_PROCESSED_DIR = PROCESSED_DIR
+OUTPUT_PROCESSED_DIR = PROCESSED_DIR
+PRICE_RAW_DIR = RAW_DIR
+
 MODEL_NAME = "snunlp/KR-FinBert-SC"
 LABELS = ["negative", "neutral", "positive"]  # 모델 config의 라벨 순서
-PAXNET_VALID_CODES = ["005930", "000660"]
+
+# 감성점수에 실제로 포함할 소스를 종목별로 명시한다.
+# 네이버 게시판은 다른 소스와 합치지 않고 별도 sentiment_scored_board 파일로 관리한다.
+# 네이버 뉴스(news_*.csv)는 과거 수집이 불완전하므로 어떤 종목에도 넣지 않는다.
+SENTIMENT_SOURCES_BY_CODE = {
+    "005930": ("edaily_news", "toss_community", "paxnet_board"),
+    "000660": ("edaily_news", "toss_community", "paxnet_board"),
+    "247540": ("edaily_news", "toss_community"),
+    "035720": ("edaily_news", "toss_community"),
+}
 
 
 class SentimentScorer:
@@ -46,22 +62,29 @@ class SentimentScorer:
         self.model.eval()
 
     def score_batch(self, texts: list[str], batch_size: int = 16) -> pd.DataFrame:
-        rows = []
+        # 길이가 비슷한 문장을 같은 배치로 묶으면 짧은 게시판 제목이 긴 뉴스 본문 길이까지
+        # padding되는 낭비를 줄일 수 있다. 결과는 원래 입력 순서로 되돌려 저장한다.
+        indexed_texts = sorted(enumerate(texts), key=lambda item: len(item[1]) if isinstance(item[1], str) else 0)
+        rows: list[dict | None] = [None] * len(texts)
+        total_batches = (len(indexed_texts) + batch_size - 1) // batch_size
         with self.torch.no_grad():
-            for i in range(0, len(texts), batch_size):
-                batch = [t if isinstance(t, str) and t.strip() else "." for t in texts[i : i + batch_size]]
+            for batch_number, i in enumerate(range(0, len(indexed_texts), batch_size), start=1):
+                indexed_batch = indexed_texts[i : i + batch_size]
+                batch = [t if isinstance(t, str) and t.strip() else "." for _, t in indexed_batch]
                 enc = self.tokenizer(batch, padding=True, truncation=True, max_length=256, return_tensors="pt")
                 logits = self.model(**enc).logits
                 probs = self.torch.softmax(logits, dim=-1).numpy()
-                for p in probs:
+                for (original_index, _), p in zip(indexed_batch, probs):
                     row = dict(zip(LABELS, p.tolist()))
                     row["sentiment_score"] = row["positive"] - row["negative"]  # -1(부정) ~ +1(긍정)
-                    rows.append(row)
+                    rows[original_index] = row
+                if batch_number % 100 == 0 or batch_number == total_batches:
+                    print(f"  감성 추론 {batch_number}/{total_batches} 배치 완료")
         return pd.DataFrame(rows)
 
 
 def _load_source(code: str, filename: str, id_col: str, text_cols: list[str], source: str) -> pd.DataFrame:
-    path = PROCESSED_DIR / filename
+    path = INPUT_PROCESSED_DIR / filename
     if not path.exists():
         return pd.DataFrame(columns=["item_id", "datetime", "text", "source"])
     df = pd.read_csv(path, encoding="utf-8-sig")
@@ -80,14 +103,29 @@ def _load_source(code: str, filename: str, id_col: str, text_cols: list[str], so
 
 def collect_all_text(code: str) -> pd.DataFrame:
     file_name = STOCK_FILE_NAMES[code]
-    frames = [
-        _load_source(code, f"edaily_news_{file_name}_clean.csv", "news_id", ["clean_headline", "clean_body"], "edaily_news"),
-        _load_source(code, f"news_{file_name}_clean.csv", "id", ["clean_title", "clean_body"], "naver_news"),
-        _load_source(code, f"board_{file_name}_clean.csv", "nid", ["clean_title"], "naver_board"),
-        _load_source(code, f"toss_community_{file_name}_clean.csv", "comment_id", ["clean_message"], "toss_community"),
-    ]
-    if code in PAXNET_VALID_CODES:
-        frames.append(_load_source(code, f"paxnet_board_{file_name}_clean.csv", "seq", ["clean_title"], "paxnet_board"))
+    loaders = {
+        "edaily_news": lambda: _load_source(
+            code,
+            f"edaily_news_{file_name}_clean.csv",
+            "news_id",
+            ["clean_headline", "clean_body"],
+            "edaily_news",
+        ),
+        "naver_board": lambda: _load_source(
+            code, f"board_{file_name}_clean.csv", "nid", ["clean_title"], "naver_board"
+        ),
+        "toss_community": lambda: _load_source(
+            code,
+            f"toss_community_{file_name}_clean.csv",
+            "comment_id",
+            ["clean_message"],
+            "toss_community",
+        ),
+        "paxnet_board": lambda: _load_source(
+            code, f"paxnet_board_{file_name}_clean.csv", "seq", ["clean_title"], "paxnet_board"
+        ),
+    }
+    frames = [loaders[source]() for source in SENTIMENT_SOURCES_BY_CODE[code]]
 
     df = pd.concat(frames, ignore_index=True)
     df = df[df["text"].str.strip().str.len() > 0]
@@ -98,7 +136,21 @@ def score_all_sources_for_stock(scorer: SentimentScorer, code: str) -> pd.DataFr
     combined = collect_all_text(code)
     scores = scorer.score_batch(combined["text"].tolist())
     out = pd.concat([combined.reset_index(drop=True), scores], axis=1)
-    out_path = PROCESSED_DIR / f"sentiment_scored_{STOCK_FILE_NAMES[code]}.csv"
+    out_path = OUTPUT_PROCESSED_DIR / f"sentiment_scored_{STOCK_FILE_NAMES[code]}.csv"
+    out.to_csv(out_path, index=False, encoding="utf-8-sig")
+    return out
+
+
+def score_board_for_stock(scorer: SentimentScorer, code: str) -> pd.DataFrame:
+    """네이버 게시판만 별도로 점수화한다. 통합 장중·장외 지수에는 합치지 않는다."""
+    file_name = STOCK_FILE_NAMES[code]
+    board = _load_source(
+        code, f"board_{file_name}_clean.csv", "nid", ["clean_title"], "naver_board"
+    )
+    board = board[board["text"].str.strip().str.len() > 0].drop_duplicates(subset="item_id")
+    scores = scorer.score_batch(board["text"].tolist())
+    out = pd.concat([board.reset_index(drop=True), scores], axis=1)
+    out_path = OUTPUT_PROCESSED_DIR / f"sentiment_scored_board_{file_name}.csv"
     out.to_csv(out_path, index=False, encoding="utf-8-sig")
     return out
 
@@ -107,7 +159,7 @@ def _load_trading_dates(
     code: str, timestamps: pd.Series
 ) -> tuple[list[pd.Timestamp], set[pd.Timestamp]]:
     file_name = STOCK_FILE_NAMES[code]
-    price_path = RAW_DIR / f"price_daily_{file_name}.csv"
+    price_path = PRICE_RAW_DIR / f"price_daily_{file_name}.csv"
     price = pd.read_csv(price_path, encoding="utf-8-sig", usecols=["date"])
     price_dates = sorted(pd.to_datetime(price["date"], errors="raise").dt.normalize().unique().tolist())
     price_date_set = set(price_dates)
@@ -169,14 +221,14 @@ def build_session_index(code: str, scored: pd.DataFrame) -> pd.DataFrame:
     result["code"] = STOCK_ENGLISH_NAMES[code]
     result.attrs["unassigned_item_count"] = unassigned_count
 
-    out_path = PROCESSED_DIR / f"sentiment_index_daily_{STOCK_FILE_NAMES[code]}.csv"
+    out_path = OUTPUT_PROCESSED_DIR / f"sentiment_index_daily_{STOCK_FILE_NAMES[code]}.csv"
     result.to_csv(out_path, index=False, encoding="utf-8-sig")
     return result
 
 
 def rebuild_session_indexes_from_scored() -> None:
     for code, name in STOCKS.items():
-        path = PROCESSED_DIR / f"sentiment_scored_{STOCK_FILE_NAMES[code]}.csv"
+        path = OUTPUT_PROCESSED_DIR / f"sentiment_scored_{STOCK_FILE_NAMES[code]}.csv"
         scored = pd.read_csv(path, encoding="utf-8-sig")
         result = build_session_index(code, scored)
         print(
@@ -186,13 +238,35 @@ def rebuild_session_indexes_from_scored() -> None:
 
 
 def main():
+    global INPUT_PROCESSED_DIR, OUTPUT_PROCESSED_DIR, PRICE_RAW_DIR
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--six-month",
+        action="store_true",
+        help="data/6개월의 전처리·가격 파일을 사용하고 결과도 그 아래에 저장",
+    )
     parser.add_argument(
         "--aggregate-only",
         action="store_true",
         help="기존 sentiment_scored 파일을 사용해 장중/장외 일별 지수만 다시 생성",
     )
+    parser.add_argument(
+        "--codes",
+        nargs="+",
+        choices=STOCKS.keys(),
+        help="지정한 종목코드만 스코어링 (생략하면 전체 종목)",
+    )
+    parser.add_argument(
+        "--board-only",
+        action="store_true",
+        help="네이버 게시판만 별도 점수 파일로 생성하고 통합 지수에는 반영하지 않음",
+    )
     args = parser.parse_args()
+
+    if args.six_month:
+        INPUT_PROCESSED_DIR = SIX_MONTH_PROCESSED_DIR
+        OUTPUT_PROCESSED_DIR = SIX_MONTH_PROCESSED_DIR
+        PRICE_RAW_DIR = SIX_MONTH_RAW_DIR
 
     if args.aggregate_only:
         rebuild_session_indexes_from_scored()
@@ -201,7 +275,13 @@ def main():
     print(f"모델 로딩 중: {MODEL_NAME} (최초 실행 시 다운로드, 몇 분 걸릴 수 있음)")
     scorer = SentimentScorer()
 
-    for code, name in STOCKS.items():
+    selected_codes = args.codes or list(STOCKS)
+    for code in selected_codes:
+        name = STOCKS[code]
+        if args.board_only:
+            scored = score_board_for_stock(scorer, code)
+            print(f"[sentiment:board] {code} {name}: 네이버 게시판 {len(scored)}건 별도 저장")
+            continue
         scored = score_all_sources_for_stock(scorer, code)
         daily = build_session_index(code, scored)
         no_intraday = int(daily["intraday_no_posts"].sum())

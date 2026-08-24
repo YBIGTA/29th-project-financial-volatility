@@ -4,14 +4,17 @@
 - 공백 정리
 - 중복 게시글 제거
 - 너무 짧은 게시글(도배성 한두 글자) 필터링
-- datetime을 "YYYY-MM-DD HH:MM:SS" 형식으로 통일 (소스별 실제 정밀도는 유지 —
-  네이버는 원래 분 단위까지, 통합검색은 날짜 단위까지만 나옴)
 """
+import argparse
 import re
+from pathlib import Path
 
 import pandas as pd
 
-from config import PROCESSED_DIR, RAW_DIR, STOCK_FILE_NAMES, STOCKS
+from config import PROCESSED_DIR, RAW_DIR, SIX_MONTH_PROCESSED_DIR, SIX_MONTH_RAW_DIR, STOCK_FILE_NAMES, STOCKS
+
+SOURCE_DIR = RAW_DIR
+DEST_DIR = PROCESSED_DIR
 
 URL_RE = re.compile(r"https?://\S+")
 HTML_TAG_RE = re.compile(r"<[^>]+>")
@@ -40,15 +43,6 @@ SEVERE_PROFANITY_WORDS = [
 PROFANITY_WORDS = ["놈", "새끼", "병신", "좆", "지랄", "꺼져", "쓰레기", "년놈", "찐따", "장애"]
 SHORT_JUNK_LEN = 15  # 이 길이 이하이면서 욕설이 섞인 글은 분석 대상에서 제외
 
-# 소스마다 실제 시간 정밀도가 초/분/날짜로 제각각이라, 가장 거친 단위인 분 단위로
-# 맞춘다(초는 버림). 토스처럼 재수집을 반복하면서 나노초 꼬리가 붙는 것도 여기서 정리된다.
-DATETIME_FORMAT = "%Y-%m-%d %H:%M:%S"
-
-
-def normalize_datetime(df: pd.DataFrame, column: str = "datetime") -> pd.DataFrame:
-    df[column] = pd.to_datetime(df[column], format="mixed").dt.floor("min").dt.strftime(DATETIME_FORMAT)
-    return df
-
 
 def is_low_signal(text: str) -> bool:
     if not text:
@@ -76,13 +70,12 @@ def clean_text(text: str) -> str:
 
 def clean_news(code: str) -> pd.DataFrame:
     name = STOCK_FILE_NAMES[code]
-    df = pd.read_csv(RAW_DIR / f"news_{name}.csv", encoding="utf-8-sig")
-    df = normalize_datetime(df)
+    df = pd.read_csv(SOURCE_DIR / f"news_{name}.csv", encoding="utf-8-sig")
     df["clean_title"] = df["title"].map(clean_text)
     df["clean_body"] = df["body_snippet"].map(clean_text)
     df = df.drop_duplicates(subset=["clean_title", "clean_body"])
     df = df[df["clean_title"].str.len() > 0]
-    out_path = PROCESSED_DIR / f"news_{name}_clean.csv"
+    out_path = DEST_DIR / f"news_{name}_clean.csv"
     df.to_csv(out_path, index=False, encoding="utf-8-sig")
     return df
 
@@ -90,55 +83,51 @@ def clean_news(code: str) -> pd.DataFrame:
 def clean_naver_search_news(code: str) -> pd.DataFrame:
     """crawl_naver_search_news.py 결과 정제 — 직접 실행하지 않은 경우 파일이 없을 수 있어 건너뜀."""
     name = STOCK_FILE_NAMES[code]
-    path = RAW_DIR / f"news_search_{name}.csv"
+    path = SOURCE_DIR / f"news_search_{name}.csv"
     if not path.exists():
         return pd.DataFrame(columns=["url", "code", "datetime", "clean_title", "clean_body"])
     df = pd.read_csv(path, encoding="utf-8-sig")
-    df = normalize_datetime(df)
     df["clean_title"] = df["title"].map(clean_text)
     df["clean_body"] = df["body"].map(clean_text)
     df = df.drop_duplicates(subset=["clean_title", "clean_body"])
     df = df[df["clean_title"].str.len() > 0]
-    out_path = PROCESSED_DIR / f"news_search_{name}_clean.csv"
+    out_path = DEST_DIR / f"news_search_{name}_clean.csv"
     df.to_csv(out_path, index=False, encoding="utf-8-sig")
     return df
 
 
 def clean_board(code: str) -> pd.DataFrame:
     name = STOCK_FILE_NAMES[code]
-    df = pd.read_csv(RAW_DIR / f"board_{name}.csv", encoding="utf-8-sig")
-    df = normalize_datetime(df)
+    df = pd.read_csv(SOURCE_DIR / f"board_{name}.csv", encoding="utf-8-sig")
     df["clean_title"] = df["title"].map(clean_text)
     df = df.drop_duplicates(subset=["clean_title", "author", "datetime"])
     df = df[df["clean_title"].str.len() >= MIN_BOARD_TITLE_LEN]
     df = df[~df["clean_title"].map(is_low_signal)]
-    out_path = PROCESSED_DIR / f"board_{name}_clean.csv"
+    out_path = DEST_DIR / f"board_{name}_clean.csv"
     df.to_csv(out_path, index=False, encoding="utf-8-sig")
     return df
 
 
 def clean_paxnet_board(code: str) -> pd.DataFrame:
     name = STOCK_FILE_NAMES[code]
-    df = pd.read_csv(RAW_DIR / f"paxnet_board_{name}.csv", encoding="utf-8-sig")
-    df = normalize_datetime(df)
+    df = pd.read_csv(SOURCE_DIR / f"paxnet_board_{name}.csv", encoding="utf-8-sig")
     df["clean_title"] = df["title"].map(clean_text)
     df = df.drop_duplicates(subset=["clean_title", "author", "datetime"])
     df = df[df["clean_title"].str.len() >= MIN_BOARD_TITLE_LEN]
     df = df[~df["clean_title"].map(is_low_signal)]
-    out_path = PROCESSED_DIR / f"paxnet_board_{name}_clean.csv"
+    out_path = DEST_DIR / f"paxnet_board_{name}_clean.csv"
     df.to_csv(out_path, index=False, encoding="utf-8-sig")
     return df
 
 
 def clean_edaily_news(code: str) -> pd.DataFrame:
     name = STOCK_FILE_NAMES[code]
-    df = pd.read_csv(RAW_DIR / f"edaily_news_{name}.csv", encoding="utf-8-sig")
-    df = normalize_datetime(df)
+    df = pd.read_csv(SOURCE_DIR / f"edaily_news_{name}.csv", encoding="utf-8-sig")
     df["clean_headline"] = df["headline"].map(clean_text)
     df["clean_body"] = df["body"].map(clean_text)
     df = df.drop_duplicates(subset=["clean_headline", "clean_body"])
     df = df[df["clean_headline"].str.len() > 0]
-    out_path = PROCESSED_DIR / f"edaily_news_{name}_clean.csv"
+    out_path = DEST_DIR / f"edaily_news_{name}_clean.csv"
     df.to_csv(out_path, index=False, encoding="utf-8-sig")
     return df
 
@@ -148,14 +137,13 @@ MIN_TOSS_LIKES = 1  # 추천 0인 글은 노이즈일 가능성이 높아 제외
 
 def clean_toss_community(code: str) -> pd.DataFrame:
     name = STOCK_FILE_NAMES[code]
-    df = pd.read_csv(RAW_DIR / f"toss_community_{name}.csv", encoding="utf-8-sig")
-    df = normalize_datetime(df)
+    df = pd.read_csv(SOURCE_DIR / f"toss_community_{name}.csv", encoding="utf-8-sig")
     df["clean_message"] = df["message"].map(clean_text)
     df = df.drop_duplicates(subset=["clean_message", "author", "datetime"])
     df = df[df["clean_message"].str.len() >= MIN_BOARD_TITLE_LEN]
     df = df[~df["clean_message"].map(is_low_signal)]
     df = df[df["likes"] >= MIN_TOSS_LIKES]
-    out_path = PROCESSED_DIR / f"toss_community_{name}_clean.csv"
+    out_path = DEST_DIR / f"toss_community_{name}_clean.csv"
     df.to_csv(out_path, index=False, encoding="utf-8-sig")
     return df
 
@@ -165,22 +153,36 @@ def clean_toss_community(code: str) -> pd.DataFrame:
 PAXNET_VALID_CODES = ["005930", "000660"]
 
 
-def main():
+def main(raw_dir: Path = RAW_DIR, processed_dir: Path = PROCESSED_DIR):
+    global SOURCE_DIR, DEST_DIR
+    SOURCE_DIR = Path(raw_dir)
+    DEST_DIR = Path(processed_dir)
+    DEST_DIR.mkdir(parents=True, exist_ok=True)
+
     for code, name in STOCKS.items():
-        news_df = clean_news(code)
-        board_df = clean_board(code)
-        edaily_df = clean_edaily_news(code)
-        toss_df = clean_toss_community(code)
-        search_df = clean_naver_search_news(code)
-        print(
-            f"[clean] {code} {name}: naver news {len(news_df)}건, naver board {len(board_df)}건, "
-            f"edaily news {len(edaily_df)}건, toss {len(toss_df)}건, naver search {len(search_df)}건"
-        )
+        label = STOCK_FILE_NAMES[code]
+        results = []
+        if (SOURCE_DIR / f"board_{label}.csv").exists():
+            results.append(f"naver board {len(clean_board(code))}건")
+        if (SOURCE_DIR / f"edaily_news_{label}.csv").exists():
+            results.append(f"edaily news {len(clean_edaily_news(code))}건")
+        if (SOURCE_DIR / f"toss_community_{label}.csv").exists():
+            results.append(f"toss {len(clean_toss_community(code))}건")
+        if results:
+            print(f"[clean] {code} {name}: " + ", ".join(results))
 
     for code in PAXNET_VALID_CODES:
-        df = clean_paxnet_board(code)
-        print(f"[clean] {code} {STOCKS[code]}: paxnet board {len(df)}건")
+        label = STOCK_FILE_NAMES[code]
+        if (SOURCE_DIR / f"paxnet_board_{label}.csv").exists():
+            df = clean_paxnet_board(code)
+            print(f"[clean] {code} {STOCKS[code]}: paxnet board {len(df)}건")
 
 
 if __name__ == "__main__":
-    main()
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--six-month", action="store_true")
+    args = parser.parse_args()
+    if args.six_month:
+        main(SIX_MONTH_RAW_DIR, SIX_MONTH_PROCESSED_DIR)
+    else:
+        main()

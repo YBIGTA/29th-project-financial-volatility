@@ -9,5 +9,13 @@ data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
 
+# Local datasets and generated artifacts
+data/
+artifacts/
+
+# Ignore Markdown documentation except the root README
+*.md
+!/README.md
+
 # 종목별 정리(merged csv + 차트)도 Drive로 관리
 data/정리/
